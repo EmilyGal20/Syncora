@@ -6,5 +6,6 @@ FastAPI dependencies reload roles and permissions and enforce granular permissio
 
 CORS permits only configured origins and headers. Responses add content-type, frame, and referrer protections. Validation errors are safe; unhandled errors return a generic message. Secrets come from environment variables and `.env` is ignored.
 
-The current browser model keeps access tokens in session storage and refresh tokens in local storage. This is acceptable only for the local foundation. Production should use TLS and an HttpOnly, Secure, SameSite refresh cookie with CSRF controls. Login rate limiting should be added at the edge before public deployment.
+Access tokens remain in per-tab session storage. Refresh tokens are transported only through an HttpOnly `SameSite=Lax` cookie, are `Secure` in production, stored server-side only as hashes, and rotated on every refresh. Application JavaScript cannot read them. Login rate limiting should be added at the edge before public deployment.
 
+Tasks and events are filtered in SQL using effective access scope. Individual-resource endpoints repeat the tenant, ownership, team, or department check and return 404 for unauthorized identifiers. Announcement audiences are resolved server-side. Automated and live checks cover direct deny precedence, foreign tenant records, cross-user task IDs, cross-user event IDs, and Admin API denial.

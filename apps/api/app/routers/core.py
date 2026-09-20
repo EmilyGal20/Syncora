@@ -5,8 +5,8 @@ from sqlalchemy.orm import selectinload
 
 from ..audit import record_audit
 from ..database import get_db
-from ..dependencies import current_user, permission_codes, require_permission
-from ..models import Dashboard, NavigationItem, Permission, Role, Task, User
+from ..dependencies import access_scope, current_user, permission_codes, require_permission
+from ..models import Dashboard, NavigationItem, Permission, Role, Task, User, UserPreference
 from ..schemas import NavigationInput, RoleCreate, TaskCreate, UserCreate, UserUpdate
 from ..security import hash_password
 
@@ -17,7 +17,7 @@ def user_json(user: User) -> dict:
     return {
         "id": user.id, "email": user.email, "full_name": user.full_name,
         "is_active": user.is_active, "department_id": user.department_id,
-        "team_id": user.team_id, "last_login_at": user.last_login_at,
+        "team_id": user.team_id, "locale": user.locale, "last_login_at": user.last_login_at,
         "created_at": user.created_at, "roles": [r.name for r in user.roles],
     }
 
@@ -41,8 +41,10 @@ async def create_user(body: UserCreate, actor: User = Depends(require_permission
     if exists:
         raise HTTPException(status_code=409, detail="A user with this email already exists")
     roles = list((await db.scalars(select(Role).where(Role.organization_id == actor.organization_id, Role.id.in_(body.role_ids)))).all()) if body.role_ids else []
-    created = User(organization_id=actor.organization_id, email=body.email.lower(), full_name=body.full_name, password_hash=hash_password(body.password), department_id=body.department_id, team_id=body.team_id, roles=roles)
+    created = User(organization_id=actor.organization_id, email=body.email.lower(), full_name=body.full_name, password_hash=hash_password(body.password), department_id=body.department_id, team_id=body.team_id, locale=body.locale, roles=roles)
     db.add(created)
+    await db.flush()
+    db.add(UserPreference(user_id=created.id, locale=body.locale or "en"))
     await db.commit()
     await record_audit(actor, "user.created", "user", created.id, {"email": created.email})
     return user_json(created)
@@ -88,8 +90,9 @@ async def create_role(body: RoleCreate, actor: User = Depends(require_permission
 @router.get("/navigation")
 async def navigation(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     allowed = permission_codes(user)
+    locale = user.locale or next((role.default_locale for role in user.roles if role.default_locale), None) or "en"
     values = (await db.scalars(select(NavigationItem).where(NavigationItem.organization_id == user.organization_id, NavigationItem.enabled.is_(True)).order_by(NavigationItem.order))).all()
-    return [{"id": n.id, "parent_id": n.parent_id, "title": n.title, "icon": n.icon, "route": n.route, "item_type": n.item_type, "order": n.order, "required_permission": n.required_permission, "module": n.module, "enabled": n.enabled} for n in values if not n.required_permission or n.required_permission in allowed or user.is_platform_admin]
+    return [{"id": n.id, "parent_id": n.parent_id, "title": (n.title_he if locale == "he" else n.title_en) or n.title, "icon": n.icon, "route": n.route, "item_type": n.item_type, "order": n.order, "required_permission": n.required_permission, "module": n.module, "enabled": n.enabled} for n in values if not n.required_permission or n.required_permission in allowed or user.is_platform_admin]
 
 
 @router.get("/navigation/all")
@@ -129,16 +132,29 @@ async def dashboard(user: User = Depends(require_permission("dashboard.view")), 
 
 @router.get("/tasks")
 async def tasks(user: User = Depends(require_permission("tasks.view")), db: AsyncSession = Depends(get_db)):
-    values = (await db.scalars(select(Task).where(Task.organization_id == user.organization_id).order_by(Task.created_at.desc()))).all()
+    scope = access_scope(user, "tasks.view")
+    query = select(Task).where(Task.organization_id == user.organization_id)
+    if scope == "OWN":
+        query = query.where(or_(Task.assignee_id == user.id, Task.creator_id == user.id))
+    elif scope == "TEAM":
+        query = query.where(or_(Task.assignee_id == user.id, Task.creator_id == user.id, Task.team_id == user.team_id))
+    elif scope == "DEPARTMENT":
+        query = query.where(or_(Task.assignee_id == user.id, Task.creator_id == user.id, Task.department_id == user.department_id))
+    values = (await db.scalars(query.order_by(Task.created_at.desc()))).all()
     return values
 
 
 @router.post("/tasks", status_code=201)
 async def create_task(body: TaskCreate, actor: User = Depends(require_permission("tasks.create")), db: AsyncSession = Depends(get_db)):
+    scope = access_scope(actor, "tasks.create")
+    if scope == "OWN" and body.assignee_id not in (None, actor.id):
+        raise HTTPException(status_code=403, detail="You may only assign tasks to yourself")
     if body.assignee_id and not await db.scalar(select(User.id).where(User.id == body.assignee_id, User.organization_id == actor.organization_id)):
         raise HTTPException(status_code=422, detail="Assignee does not belong to this organization")
-    task = Task(organization_id=actor.organization_id, creator_id=actor.id, **body.model_dump())
+    values = body.model_dump()
+    values["assignee_id"] = values["assignee_id"] or actor.id
+    values["department_id"] = actor.department_id
+    task = Task(organization_id=actor.organization_id, creator_id=actor.id, **values)
     db.add(task)
     await db.commit()
     return task
-

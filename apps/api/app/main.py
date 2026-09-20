@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
-from .routers import auth, core
+from .routers import auth, core, phase2
 from .seed import seed
 
 settings = get_settings()
@@ -26,7 +26,7 @@ app = FastAPI(title="Syncora API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
@@ -53,3 +53,4 @@ async def health():
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(core.router, prefix="/api/v1")
+app.include_router(phase2.router, prefix="/api/v1")

@@ -10,3 +10,4 @@ Run Python migrations from `apps/api`:
 
 The audit service uses a separate EF Core migration and table in the same development database. Production can place that service in a separately managed PostgreSQL database without changing its boundary.
 
+`0002_phase2` adds scoped access grants, locale/theme policy, localized navigation, team membership, task visibility, event ownership and participants, and announcement audiences. It is idempotent because the original `0001` migration used live metadata; this allows safe upgrades from both the existing Phase 1 database and a clean database.

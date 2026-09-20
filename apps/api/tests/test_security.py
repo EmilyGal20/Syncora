@@ -3,7 +3,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.dependencies import assert_tenant, permission_codes
+from app.dependencies import access_scope, assert_tenant, permission_codes
+from app.routers.phase2 import task_visible
 from app.security import create_access_token, decode_access_token, hash_password, verify_password
 
 
@@ -31,3 +32,18 @@ def test_permissions_are_aggregated_across_roles():
     user = SimpleNamespace(roles=[SimpleNamespace(permissions=[SimpleNamespace(code="users.view")]), SimpleNamespace(permissions=[SimpleNamespace(code="tasks.view")])])
     assert permission_codes(user) == {"users.view", "tasks.view"}
 
+
+def test_direct_deny_overrides_role_scope():
+    permission = SimpleNamespace(code="tasks.view")
+    user = SimpleNamespace(is_platform_admin=False, roles=[], _access_grants=[SimpleNamespace(permission=permission, principal_type="role", effect="allow", scope="TEAM"), SimpleNamespace(permission=permission, principal_type="user", effect="deny", scope="OWN")])
+    assert access_scope(user, "tasks.view") is None
+
+
+def test_task_visibility_enforces_owner_and_tenant():
+    user = SimpleNamespace(id="user-a", organization_id="org-a", team_id="team-a", department_id="dept-a")
+    own = SimpleNamespace(organization_id="org-a", assignee_id="user-a", creator_id="other", team_id=None, department_id=None)
+    other = SimpleNamespace(organization_id="org-a", assignee_id="user-b", creator_id="user-b", team_id="team-b", department_id="dept-b")
+    foreign = SimpleNamespace(organization_id="org-b", assignee_id="user-a", creator_id="user-a", team_id="team-a", department_id="dept-a")
+    assert task_visible(own, user, "OWN")
+    assert not task_visible(other, user, "OWN")
+    assert not task_visible(foreign, user, "ORGANIZATION")

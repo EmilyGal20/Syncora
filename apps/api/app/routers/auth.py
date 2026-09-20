@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,26 +25,30 @@ def user_summary(user: User) -> UserSummary:
     )
 
 
-async def issue_tokens(db: AsyncSession, user: User) -> TokenResponse:
+async def issue_tokens(db: AsyncSession, user: User, response: Response) -> TokenResponse:
     raw, digest = new_refresh_token()
     db.add(RefreshToken(user_id=user.id, token_hash=digest, expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_days)))
     await db.commit()
-    return TokenResponse(access_token=create_access_token(user.id, user.organization_id), refresh_token=raw, expires_in=settings.access_token_minutes * 60)
+    response.set_cookie("syncora_refresh", raw, httponly=True, secure=settings.environment == "production", samesite="lax", path="/api/v1/auth", max_age=settings.refresh_token_days * 86400)
+    return TokenResponse(access_token=create_access_token(user.id, user.organization_id), expires_in=settings.access_token_minutes * 60)
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.email == body.email.lower()))
     user = result.scalar_one_or_none()
     if not user or not user.is_active or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     user.last_login_at = datetime.now(UTC)
-    return await issue_tokens(db, user)
+    return await issue_tokens(db, user, response)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == hash_token(body.refresh_token)))
+async def refresh(response: Response, body: RefreshRequest | None = None, syncora_refresh: str | None = Cookie(default=None), db: AsyncSession = Depends(get_db)):
+    raw_token = syncora_refresh or (body.refresh_token if body else None)
+    if not raw_token:
+        raise HTTPException(status_code=401, detail="Refresh token required")
+    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == hash_token(raw_token)))
     saved = result.scalar_one_or_none()
     now = datetime.now(UTC)
     if not saved or saved.revoked_at or saved.expires_at.replace(tzinfo=UTC) <= now:
@@ -53,17 +57,20 @@ async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
     user = await db.get(User, saved.user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Account is unavailable")
-    return await issue_tokens(db, user)
+    return await issue_tokens(db, user, response)
 
 
 @router.post("/logout", status_code=204)
-async def logout(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == hash_token(body.refresh_token)))
-    saved = result.scalar_one_or_none()
+async def logout(response: Response, body: RefreshRequest | None = None, syncora_refresh: str | None = Cookie(default=None), db: AsyncSession = Depends(get_db)):
+    raw_token = syncora_refresh or (body.refresh_token if body else None)
+    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == hash_token(raw_token))) if raw_token else None
+    saved = result.scalar_one_or_none() if result else None
     if saved and not saved.revoked_at:
         saved.revoked_at = datetime.now(UTC)
         await db.commit()
-    return Response(status_code=204)
+    response.delete_cookie("syncora_refresh", path="/api/v1/auth")
+    response.status_code = 204
+    return response
 
 
 @router.get("/me", response_model=UserSummary)

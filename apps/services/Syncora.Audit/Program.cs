@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,11 +21,9 @@ app.Use(async (context, next) => {
 });
 app.MapHealthChecks("/health");
 
-static bool Authorized(HttpRequest request, IConfiguration config) =>
-    request.Headers["X-Service-Key"] == (config["AUDIT_SERVICE_KEY"] ?? "development-audit-key");
-
 app.MapPost("/internal/audit", async (AuditInput input, HttpRequest request, IConfiguration config, AuditDb db) => {
-    if (!Authorized(request, config)) return Results.Unauthorized();
+    if (!AuditPolicy.Authorized(request.Headers["X-Service-Key"], config["AUDIT_SERVICE_KEY"] ?? "development-audit-key")) return Results.Unauthorized();
+    if (!AuditPolicy.Valid(input)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["action"] = ["Audit fields are required"] });
     var record = new AuditRecord {
         OrganizationId = input.OrganizationId, ActorId = input.ActorId, Action = input.Action,
         Entity = input.Entity, EntityId = input.EntityId,
@@ -36,7 +35,7 @@ app.MapPost("/internal/audit", async (AuditInput input, HttpRequest request, ICo
 });
 
 app.MapGet("/internal/audit", async (Guid organizationId, HttpRequest request, IConfiguration config, AuditDb db) => {
-    if (!Authorized(request, config)) return Results.Unauthorized();
+    if (!AuditPolicy.Authorized(request.Headers["X-Service-Key"], config["AUDIT_SERVICE_KEY"] ?? "development-audit-key")) return Results.Unauthorized();
     var records = await db.AuditRecords.AsNoTracking().Where(x => x.OrganizationId == organizationId)
         .OrderByDescending(x => x.OccurredAt).Take(200).ToListAsync();
     return Results.Ok(records);
@@ -45,6 +44,10 @@ app.MapGet("/internal/audit", async (Guid organizationId, HttpRequest request, I
 app.Run();
 
 public record AuditInput(Guid OrganizationId, Guid ActorId, string Action, string Entity, Guid EntityId, Dictionary<string, object>? Metadata);
+public static class AuditPolicy {
+    public static bool Authorized(string? supplied, string expected) => !string.IsNullOrWhiteSpace(expected) && CryptographicOperations.FixedTimeEquals(System.Text.Encoding.UTF8.GetBytes(supplied ?? ""), System.Text.Encoding.UTF8.GetBytes(expected));
+    public static bool Valid(AuditInput input) => input.OrganizationId != Guid.Empty && input.ActorId != Guid.Empty && input.EntityId != Guid.Empty && !string.IsNullOrWhiteSpace(input.Action) && !string.IsNullOrWhiteSpace(input.Entity);
+}
 public sealed class AuditRecord {
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid OrganizationId { get; init; }

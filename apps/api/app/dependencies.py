@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from .database import get_db
-from .models import Role, User
+from .models import AccessGrant, Role, User
 from .security import decode_access_token
 
 bearer = HTTPBearer(auto_error=False)
@@ -30,16 +30,47 @@ async def current_user(
     user = result.scalar_one_or_none()
     if not user or not user.is_active or user.organization_id != payload.get("org"):
         raise HTTPException(status_code=401, detail="Account is unavailable")
+    role_ids = [role.id for role in user.roles]
+    grants = list((await db.scalars(select(AccessGrant).where(
+        AccessGrant.organization_id == user.organization_id,
+        ((AccessGrant.principal_type == "user") & (AccessGrant.principal_id == user.id)) |
+        ((AccessGrant.principal_type == "role") & (AccessGrant.principal_id.in_(role_ids))),
+    ))).all())
+    user._access_grants = grants
     return user
 
 
 def permission_codes(user: User) -> set[str]:
-    return {permission.code for role in user.roles for permission in role.permissions}
+    codes = {permission.code for role in user.roles for permission in role.permissions}
+    direct_denies = {g.permission.code for g in getattr(user, "_access_grants", []) if g.principal_type == "user" and g.effect == "deny"}
+    direct_allows = {g.permission.code for g in getattr(user, "_access_grants", []) if g.principal_type == "user" and g.effect == "allow"}
+    return (codes | direct_allows) - direct_denies
+
+
+SCOPE_RANK = {"OWN": 0, "TEAM": 1, "DEPARTMENT": 2, "ORGANIZATION": 3}
+
+
+def access_scope(user: User, code: str) -> str | None:
+    if user.is_platform_admin:
+        return "ORGANIZATION"
+    grants = [g for g in getattr(user, "_access_grants", []) if g.permission.code == code]
+    direct = [g for g in grants if g.principal_type == "user"]
+    if any(g.effect == "deny" for g in direct):
+        return None
+    direct_allow = [g.scope for g in direct if g.effect == "allow"]
+    if direct_allow:
+        return max(direct_allow, key=lambda value: SCOPE_RANK[value])
+    role_scopes = [g.scope for g in grants if g.principal_type == "role" and g.effect == "allow"]
+    if role_scopes:
+        return max(role_scopes, key=lambda value: SCOPE_RANK[value])
+    if code in {p.code for role in user.roles for p in role.permissions}:
+        return "OWN"
+    return None
 
 
 def require_permission(code: str) -> Callable:
     async def dependency(user: User = Depends(current_user)) -> User:
-        if not user.is_platform_admin and code not in permission_codes(user):
+        if access_scope(user, code) is None:
             raise HTTPException(status_code=403, detail=f"Permission required: {code}")
         return user
     return dependency
@@ -48,4 +79,3 @@ def require_permission(code: str) -> Callable:
 def assert_tenant(entity_organization_id: str, user: User) -> None:
     if entity_organization_id != user.organization_id and not user.is_platform_admin:
         raise HTTPException(status_code=404, detail="Resource not found")
-

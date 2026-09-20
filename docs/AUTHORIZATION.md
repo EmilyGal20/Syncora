@@ -4,3 +4,4 @@ Users may have multiple organization roles. Roles contain globally defined granu
 
 Organization administrators can create roles and select permissions. Platform-administrator capability is represented independently from organization roles. Cross-tenant entity identifiers are answered as not found.
 
+Phase 2 adds `access_grants`. A grant targets a role or individual user, has an allow/deny effect, and carries one of `OWN`, `TEAM`, `DEPARTMENT`, or `ORGANIZATION`. Direct user denies win, direct user allows override role scope, and otherwise the broadest role grant applies. SQL queries apply that scope before rows are returned. Legacy role-permission links remain readable for migration compatibility and default to `OWN` when no scoped grant exists.

@@ -2,6 +2,8 @@
 
 Syncora is a multi-tenant organizational workspace for daily work, administration, tasks, schedules, teams, announcements, and configurable dashboards/navigation.
 
+Phase 2 adds scoped RBAC, individual allow/deny overrides, personal-data isolation, a real FullCalendar schedule, connected creation dialogs, role permission matrix, drag-and-drop navigation ordering, English/Hebrew runtime localization with RTL, light/dark/system themes, and HttpOnly refresh cookies.
+
 ## Architecture
 
 - `apps/web`: React 19, TypeScript, Vite, MUI, React Router, TanStack Query, React Hook Form, and Zod.

@@ -22,6 +22,21 @@ role_permissions = Table(
     Column("role_id", String(36), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
     Column("permission_id", String(36), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
 )
+team_members = Table(
+    "team_members", Base.metadata,
+    Column("team_id", String(36), ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+)
+event_participants = Table(
+    "event_participants", Base.metadata,
+    Column("event_id", String(36), ForeignKey("events.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+)
+announcement_users = Table(
+    "announcement_users", Base.metadata,
+    Column("announcement_id", String(36), ForeignKey("announcements.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class TaskStatus(str, enum.Enum):
@@ -42,6 +57,10 @@ class Organization(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(160), unique=True)
     slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    default_locale: Mapped[str] = mapped_column(String(12), default="en")
+    default_theme: Mapped[str] = mapped_column(String(20), default="system")
+    allow_user_locale: Mapped[bool] = mapped_column(Boolean, default=True)
+    allow_user_theme: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Department(Base, TimestampMixin):
@@ -58,6 +77,9 @@ class Team(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    manager_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Permission(Base):
@@ -75,6 +97,8 @@ class Role(Base, TimestampMixin):
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(240), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    default_locale: Mapped[str | None] = mapped_column(String(12))
     permissions: Mapped[list[Permission]] = relationship(secondary=role_permissions, lazy="selectin")
 
 
@@ -91,6 +115,7 @@ class User(Base, TimestampMixin):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     department_id: Mapped[str | None] = mapped_column(ForeignKey("departments.id"))
     team_id: Mapped[str | None] = mapped_column(ForeignKey("teams.id"))
+    locale: Mapped[str | None] = mapped_column(String(12))
     roles: Mapped[list[Role]] = relationship(secondary=user_roles, lazy="selectin")
 
 
@@ -109,6 +134,8 @@ class NavigationItem(Base, TimestampMixin):
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     parent_id: Mapped[str | None] = mapped_column(ForeignKey("navigation_items.id"))
     title: Mapped[str] = mapped_column(String(80))
+    title_en: Mapped[str | None] = mapped_column(String(80))
+    title_he: Mapped[str | None] = mapped_column(String(80))
     icon: Mapped[str] = mapped_column(String(60), default="Circle")
     route: Mapped[str | None] = mapped_column(String(160))
     item_type: Mapped[str] = mapped_column(String(20), default="item")
@@ -149,10 +176,12 @@ class Task(Base, TimestampMixin):
     status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus), default=TaskStatus.todo)
     priority: Mapped[str] = mapped_column(String(20), default="medium")
     assignee_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
-    creator_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    creator_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     tags: Mapped[list] = mapped_column(JSON, default=list)
     team_id: Mapped[str | None] = mapped_column(ForeignKey("teams.id"))
+    department_id: Mapped[str | None] = mapped_column(ForeignKey("departments.id"))
+    visibility: Mapped[str] = mapped_column(String(20), default="private")
 
 
 class Event(Base, TimestampMixin):
@@ -160,9 +189,17 @@ class Event(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     visibility: Mapped[str] = mapped_column(String(20), default="organization")
+    all_day: Mapped[bool] = mapped_column(Boolean, default=False)
+    location: Mapped[str] = mapped_column(String(200), default="")
+    creator_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    team_id: Mapped[str | None] = mapped_column(ForeignKey("teams.id"))
+    department_id: Mapped[str | None] = mapped_column(ForeignKey("departments.id"))
+    participants: Mapped[list[User]] = relationship(secondary=event_participants, lazy="selectin")
 
 
 class Announcement(Base, TimestampMixin):
@@ -172,6 +209,14 @@ class Announcement(Base, TimestampMixin):
     title: Mapped[str] = mapped_column(String(200))
     body: Mapped[str] = mapped_column(Text)
     published: Mapped[bool] = mapped_column(Boolean, default=False)
+    audience: Mapped[str] = mapped_column(String(20), default="organization")
+    team_id: Mapped[str | None] = mapped_column(ForeignKey("teams.id"))
+    department_id: Mapped[str | None] = mapped_column(ForeignKey("departments.id"))
+    creator_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    publish_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    priority: Mapped[str] = mapped_column(String(20), default="normal")
+    target_users: Mapped[list[User]] = relationship(secondary=announcement_users, lazy="selectin")
 
 
 class UserPreference(Base):
@@ -182,3 +227,16 @@ class UserPreference(Base):
     timezone: Mapped[str] = mapped_column(String(80), default="UTC")
     locale: Mapped[str] = mapped_column(String(12), default="en")
     notifications: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class AccessGrant(Base, TimestampMixin):
+    __tablename__ = "access_grants"
+    __table_args__ = (UniqueConstraint("organization_id", "principal_type", "principal_id", "permission_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    principal_type: Mapped[str] = mapped_column(String(10))
+    principal_id: Mapped[str] = mapped_column(String(36), index=True)
+    permission_id: Mapped[str] = mapped_column(ForeignKey("permissions.id", ondelete="CASCADE"))
+    scope: Mapped[str] = mapped_column(String(20), default="OWN")
+    effect: Mapped[str] = mapped_column(String(10), default="allow")
+    permission: Mapped[Permission] = relationship(lazy="joined")
