@@ -236,6 +236,21 @@ async def create_event(body: EventInput, actor: User = Depends(require_permissio
     return event
 
 
+@router.patch("/events/{event_id}")
+async def update_event(event_id: str, body: EventInput, actor: User = Depends(require_permission("schedule.edit")), db: AsyncSession = Depends(get_db)):
+    event = await db.scalar(select(Event).options(selectinload(Event.participants)).where(Event.id == event_id, event_clause(actor, access_scope(actor, "schedule.edit") or "OWN")))
+    if not event: raise HTTPException(status_code=404, detail="Event not found")
+    if body.ends_at <= body.starts_at: raise HTTPException(status_code=422, detail="End must be after start")
+    participants = await validate_users(db, actor.organization_id, body.participant_ids)
+    owner = body.owner_user_id or event.owner_user_id or actor.id
+    if owner != actor.id and access_scope(actor, "schedule.edit") != "ORGANIZATION": raise HTTPException(status_code=403, detail="Cannot assign event ownership to another user")
+    for key, value in body.model_dump(exclude={"participant_ids", "owner_user_id"}).items(): setattr(event, key, value)
+    event.owner_user_id = owner
+    event.participants = participants
+    await db.commit(); await record_audit(actor, "schedule.updated", "event", event.id)
+    return event
+
+
 @router.delete("/events/{event_id}", status_code=204)
 async def delete_event(event_id: str, actor: User = Depends(require_permission("schedule.delete")), db: AsyncSession = Depends(get_db)):
     event = await db.scalar(select(Event).where(Event.id == event_id, event_clause(actor, access_scope(actor, "schedule.delete") or "OWN")))

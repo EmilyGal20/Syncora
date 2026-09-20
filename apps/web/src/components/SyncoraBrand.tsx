@@ -1,16 +1,17 @@
 import { Box, useTheme } from '@mui/material'
-import logo from '../assets/brand/syncora-logo-transparent.png'
+import darkLogo from '../assets/brand/syncora-logo-dark.png'
+import lightLogo from '../assets/brand/syncora-logo-light.png'
+import mark from '../assets/brand/syncora-mark.png'
+import wordmark from '../assets/brand/syncora-wordmark.png'
+import loader from '../assets/brand/SyncoraLoader.svg'
 
-export function SyncoraLogo({compact=false}:{compact?:boolean}) {
+export function SyncoraLogo({compact=false,asset='logo',variant='auto'}:{compact?:boolean;asset?:'logo'|'mark'|'wordmark';variant?:'auto'|'light'|'dark'}) {
   const theme=useTheme()
-  return <Box component="img" src={logo} alt="Syncora - Plan, Manage, Connect" data-brand-variant={theme.palette.mode} sx={{display:'block',width:compact?138:{xs:180,sm:220},height:'auto',aspectRatio:'1 / 1',objectFit:'contain',filter:theme.palette.mode==='dark'?'brightness(1.35) contrast(1.05)':'none'}}/>
+  const resolved=variant==='auto'?theme.palette.mode:variant
+  const source=asset==='mark'?mark:asset==='wordmark'?wordmark:resolved==='dark'?darkLogo:lightLogo
+  return <Box component="img" src={source} alt={asset==='mark'?'Syncora': 'Syncora - Plan, Manage, Connect'} data-brand-variant={resolved} data-brand-asset={asset} sx={{display:'block',width:compact?142:asset==='mark'?{xs:76,sm:88}:{xs:190,sm:240},height:'auto',maxWidth:'100%',objectFit:'contain'}}/>
 }
 
-export function SyncoraLoader({label='Loading Syncora'}:{label?:string}) {
-  return <Box role="status" aria-label={label} sx={{width:52,height:52,'& .syncora-pulse':{transformOrigin:'32px 32px',animation:'syncoraPulse 1.6s ease-in-out infinite'},'@keyframes syncoraPulse':{'0%,100%':{opacity:.72,transform:'scale(.96)'},'50%':{opacity:1,transform:'scale(1.02)'}},'@media (prefers-reduced-motion: reduce)':{'& .syncora-pulse':{animation:'none',opacity:1}}}}>
-    <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
-      <defs><linearGradient id="syncora-loader-gradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse"><stop stopColor="#25C5F6"/><stop offset=".48" stopColor="#3156E8"/><stop offset="1" stopColor="#B45CFA"/></linearGradient></defs>
-      <g className="syncora-pulse" fill="none" stroke="url(#syncora-loader-gradient)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"><path d="M48 16H25c-8 0-11 10-4 14l22 12c7 4 4 14-4 14H16"/><path opacity=".45" d="M16 8h22c8 0 11 10 4 14L20 34c-7 4-4 14 4 14h24"/></g>
-    </svg>
-  </Box>
-}
+export const SyncoraLoader=({label='Loading Syncora',size=72}:{label?:string;size?:number})=><Box component="img" role="status" src={loader} aria-label={label} sx={{display:'block',width:size,height:size}}/>
+
+export function SyncoraLoadingSurface({message}:{message:string}){return <Box data-testid="syncora-loading-surface" sx={{position:'fixed',inset:0,zIndex:1500,display:'grid',placeItems:'center',bgcolor:'background.default',animation:'surfaceIn .22s ease-out','@keyframes surfaceIn':{from:{opacity:0},to:{opacity:1}},'@media (prefers-reduced-motion: reduce)':{animation:'none'}}}><Box sx={{display:'grid',placeItems:'center',gap:2}}><SyncoraLoader size={108}/><SyncoraLogo asset="wordmark"/><Box sx={{color:'text.secondary',fontSize:14}}>{message}</Box></Box></Box>}
