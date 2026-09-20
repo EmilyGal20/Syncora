@@ -26,6 +26,7 @@ app = FastAPI(title="Syncora API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")],
+    allow_origin_regex=settings.cors_origin_regex if settings.environment == "development" else None,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],

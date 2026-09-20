@@ -2,9 +2,13 @@
   "name": "syncora",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n web,api,audit -c cyan,green,yellow \"npm --prefix apps/web run dev\" \"npm run dev:api\" \"npm run dev:audit\"",
-    "dev:api": "python -m uvicorn app.main:app --reload --port 8500 --app-dir apps/api",
-    "dev:audit": "dotnet run --project apps/services/Syncora.Audit/Syncora.Audit.csproj --urls http://localhost:8501",
+    "dev": "node scripts/dev.mjs all",
+    "dev:frontend": "node scripts/dev.mjs frontend",
+    "dev:backend": "node scripts/dev.mjs backend",
+    "frontend": "npm run dev:frontend",
+    "backend": "npm run dev:backend",
+    "dev:api": ".\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8500 --app-dir apps/api",
+    "dev:audit": "dotnet run --project apps/services/Syncora.Audit/Syncora.Audit.csproj -- --environment Development --urls http://0.0.0.0:8501",
     "build": "npm --prefix apps/web run build && dotnet build apps/services/Syncora.Audit/Syncora.Audit.csproj --configuration Release",
     "lint": "npm --prefix apps/web run lint && python -m ruff check apps/api",
     "test": "npm --prefix apps/web test -- --run && python -m pytest apps/api/tests && dotnet test apps/services/Syncora.Audit.Tests/Syncora.Audit.Tests.csproj",
@@ -15,4 +19,3 @@
     "concurrently": "^9.2.1"
   }
 }
-

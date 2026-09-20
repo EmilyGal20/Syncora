@@ -37,6 +37,7 @@ class UserSummary(ApiModel):
     created_at: datetime
     roles: list[str] = []
     permissions: list[str] = []
+    scopes: dict[str, str] = {}
 
 
 class UserCreate(BaseModel):

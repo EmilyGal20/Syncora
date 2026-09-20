@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from ..config import get_settings
 from ..database import get_db
-from ..dependencies import current_user, permission_codes
+from ..dependencies import current_user, permission_codes, permission_scopes
 from ..models import RefreshToken, Role, User
 from ..schemas import LoginRequest, RefreshRequest, TokenResponse, UserSummary
 from ..security import create_access_token, hash_token, new_refresh_token, verify_password
@@ -19,9 +19,9 @@ settings = get_settings()
 def user_summary(user: User) -> UserSummary:
     return UserSummary(
         id=user.id, email=user.email, full_name=user.full_name, is_active=user.is_active,
-        organization_id=user.organization_id, department_id=user.department_id, team_id=user.team_id,
+        organization_id=user.organization_id, department_id=user.department_id, team_id=user.team_id, locale=user.locale,
         last_login_at=user.last_login_at, created_at=user.created_at,
-        roles=[role.name for role in user.roles], permissions=sorted(permission_codes(user)),
+        roles=[role.name for role in user.roles], permissions=sorted(permission_codes(user)), scopes=permission_scopes(user),
     )
 
 
@@ -29,7 +29,8 @@ async def issue_tokens(db: AsyncSession, user: User, response: Response) -> Toke
     raw, digest = new_refresh_token()
     db.add(RefreshToken(user_id=user.id, token_hash=digest, expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_days)))
     await db.commit()
-    response.set_cookie("syncora_refresh", raw, httponly=True, secure=settings.environment == "production", samesite="lax", path="/api/v1/auth", max_age=settings.refresh_token_days * 86400)
+    secure_cookie = settings.cookie_secure if settings.cookie_secure is not None else settings.environment == "production"
+    response.set_cookie("syncora_refresh", raw, httponly=True, secure=secure_cookie, samesite="lax", path="/api/v1/auth", max_age=settings.refresh_token_days * 86400)
     return TokenResponse(access_token=create_access_token(user.id, user.organization_id), expires_in=settings.access_token_minutes * 60)
 
 

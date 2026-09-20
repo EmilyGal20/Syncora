@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8500'
+const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 export const api = axios.create({ baseURL: `${API_URL}/api/v1`, timeout: 10000, withCredentials: true })
 
 api.interceptors.request.use((config) => {
@@ -11,7 +11,8 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(undefined, async (error) => {
   const request = error.config
-  if (error.response?.status === 401 && !request._retried && !request.url?.includes('/auth/')) {
+  const refreshable = !/\/auth\/(login|refresh|logout)$/.test(request.url ?? '')
+  if (error.response?.status === 401 && !request._retried && refreshable) {
     request._retried = true
     {
       try {
@@ -24,5 +25,6 @@ api.interceptors.response.use(undefined, async (error) => {
     sessionStorage.removeItem('syncora_access_token')
     window.dispatchEvent(new Event('syncora:unauthorized'))
   }
+  if (error.response?.status === 403) window.dispatchEvent(new Event('syncora:permissions-changed'))
   return Promise.reject(error)
 })

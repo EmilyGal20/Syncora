@@ -37,10 +37,13 @@ async def ensure_access_grants(db: AsyncSession, org: Organization, admin_role: 
     db.add_all([Permission(code=code, group=code.split(".")[0].title(), description=code.replace(".", " ").title()) for code in PERMISSIONS if code not in existing_codes])
     await db.flush()
     permissions = {p.code: p for p in (await db.scalars(select(Permission))).all()}
-    await db.execute(AccessGrant.__table__.delete().where(AccessGrant.organization_id == org.id, AccessGrant.principal_type == "role", AccessGrant.principal_id.in_([admin_role.id, member_role.id])))
-    db.add_all([AccessGrant(organization_id=org.id, principal_type="role", principal_id=admin_role.id, permission_id=p.id, scope="ORGANIZATION", effect="allow") for p in permissions.values()])
+    existing_admin = await db.scalar(select(AccessGrant.id).where(AccessGrant.organization_id == org.id, AccessGrant.principal_type == "role", AccessGrant.principal_id == admin_role.id).limit(1))
+    existing_member = await db.scalar(select(AccessGrant.id).where(AccessGrant.organization_id == org.id, AccessGrant.principal_type == "role", AccessGrant.principal_id == member_role.id).limit(1))
+    if not existing_admin:
+        db.add_all([AccessGrant(organization_id=org.id, principal_type="role", principal_id=admin_role.id, permission_id=p.id, scope="ORGANIZATION", effect="allow") for p in permissions.values()])
     member_codes = {"dashboard.view", "tasks.view", "tasks.create", "schedule.view", "schedule.create", "teams.view", "announcements.view"}
-    db.add_all([AccessGrant(organization_id=org.id, principal_type="role", principal_id=member_role.id, permission_id=permissions[code].id, scope="OWN", effect="allow") for code in member_codes])
+    if not existing_member:
+        db.add_all([AccessGrant(organization_id=org.id, principal_type="role", principal_id=member_role.id, permission_id=permissions[code].id, scope="OWN", effect="allow") for code in member_codes])
 
 
 async def seed(db: AsyncSession) -> None:

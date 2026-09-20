@@ -4,4 +4,6 @@ Users may have multiple organization roles. Roles contain globally defined granu
 
 Organization administrators can create roles and select permissions. Platform-administrator capability is represented independently from organization roles. Cross-tenant entity identifiers are answered as not found.
 
-Phase 2 adds `access_grants`. A grant targets a role or individual user, has an allow/deny effect, and carries one of `OWN`, `TEAM`, `DEPARTMENT`, or `ORGANIZATION`. Direct user denies win, direct user allows override role scope, and otherwise the broadest role grant applies. SQL queries apply that scope before rows are returned. Legacy role-permission links remain readable for migration compatibility and default to `OWN` when no scoped grant exists.
+Scoped `access_grants` are authoritative. A grant targets a role or individual user, has an allow/deny effect, and carries one of `OWN`, `TEAM`, `DEPARTMENT`, or `ORGANIZATION`. Explicit user deny wins, explicit user allow overrides roles, the broadest role grant applies for inherit, and absent grants are denied. SQL queries apply the resulting scope before rows are returned. Migration `0003_scoped_grants` copies legacy role-permission links into `OWN` grants before the old fallback is disabled.
+
+Access JWTs identify the user and organization but do not contain durable permission claims. FastAPI reloads current roles and grants for every request. The web client refreshes `/auth/me` on focus, after a denied request, and periodically so navigation and controls follow administrative changes promptly.

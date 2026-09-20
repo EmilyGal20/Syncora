@@ -11,7 +11,7 @@ Phase 2 adds scoped RBAC, individual allow/deny overrides, personal-data isolati
 - `apps/services/Syncora.Audit`: ASP.NET Core 8 append-only audit service backed by PostgreSQL.
 - PostgreSQL 17 is the primary database. Every business query is scoped to the authenticated organization.
 
-The browser calls FastAPI at `http://localhost:8500`. The API sends administration events to the internal audit service on port 8501.
+In development, the browser uses same-origin `/api` requests. Vite proxies them to FastAPI on port 8500, so authentication works through localhost, a LAN address, or a development hostname without embedding that hostname in the client. The API sends administration events to the internal audit service on port 8501.
 
 ## Prerequisites
 
@@ -45,7 +45,39 @@ cd ..\..
 npm run dev
 ```
 
-`npm run dev` starts web on 8600, API on 8500, and audit on 8501.
+## Run Everything
+
+```powershell
+npm run dev
+```
+
+Starts React on 8600, FastAPI on 8500, and the audit service on 8501. The root launcher owns the complete Windows process trees, so Ctrl+C or a failed service terminates the group cleanly.
+
+## Run Frontend Only
+
+```powershell
+npm run dev:frontend
+```
+
+Alias: `npm run frontend`. Vite listens on `0.0.0.0:8600`. API requests are proxied to `VITE_DEV_API_TARGET`, which defaults to `http://127.0.0.1:8500`.
+
+## Run Backend Only
+
+```powershell
+npm run dev:backend
+```
+
+Alias: `npm run backend`. FastAPI listens on `0.0.0.0:8500`; the audit service listens on `0.0.0.0:8501`.
+
+For zero-configuration local development the audit service uses an ignored SQLite file. Setting `AUDIT_DATABASE_URL` switches it to PostgreSQL; Docker and production continue to use PostgreSQL.
+
+## LAN Development
+
+Run `npm run dev`, find the development computer's LAN address, then open `http://<development-computer>:8600` on another device. No source change or fixed LAN IP is needed because the browser stays on `/api`. Windows Firewall must permit the three development ports on trusted/private networks.
+
+`VITE_DEV_API_TARGET` controls only the server-side Vite proxy target. Set `VITE_API_URL` only when intentionally using a separate public API origin. Direct credentialed origins are controlled by `CORS_ORIGINS`; the configurable `CORS_ORIGIN_REGEX` is honored only in development. Production ignores the regex and requires explicit trusted origins.
+
+Refresh tokens use a host-only HttpOnly, `SameSite=Lax` cookie scoped to `/api/v1/auth`. It is non-Secure for HTTP development and Secure by default in production. Production must use HTTPS; `COOKIE_SECURE` exists for explicit deployment configuration, not as a LAN workaround.
 
 ## Development Data
 
@@ -80,7 +112,9 @@ docker-compose.yml       Complete local stack
 
 ## Security Notes
 
-Access tokens live in session storage and expire quickly. Refresh tokens are opaque, stored only as SHA-256 hashes server-side, rotated on use, and kept in local storage in this initial client. For an internet deployment, move refresh tokens to Secure, HttpOnly, SameSite cookies behind TLS. Backend dependencies enforce permissions independently from the UI. Cross-tenant lookups return 404 to reduce resource enumeration.
+Access tokens live in session storage and expire quickly. Refresh tokens are opaque, stored only as SHA-256 hashes server-side, rotated on use, and transported in HttpOnly cookies. Backend dependencies reload current scoped grants for every request, so permission changes affect active sessions without waiting for JWT expiry. Cross-tenant lookups return 404 to reduce resource enumeration.
+
+The official source logo remains in `logos/`. Optimized transparent application artwork is under `apps/web/src/assets/brand/` and is used through `SyncoraLogo`; `SyncoraLoader` is a lightweight SVG reserved for login and application initialization.
 
 ## Git Workflow
 

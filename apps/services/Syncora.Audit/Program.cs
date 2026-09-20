@@ -5,14 +5,18 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 var connection = builder.Configuration.GetConnectionString("AuditDatabase")
     ?? Environment.GetEnvironmentVariable("AUDIT_DATABASE_URL")
-    ?? "Host=localhost;Port=5432;Database=syncora;Username=syncora;Password=syncora_dev";
-builder.Services.AddDbContext<AuditDb>(options => options.UseNpgsql(connection));
+    ?? "Data Source=syncora-audit.db";
+var sqlite = connection.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase);
+builder.Services.AddDbContext<AuditDb>(options => {
+    if (sqlite) options.UseSqlite(connection); else options.UseNpgsql(connection);
+});
 builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 var app = builder.Build();
 if (app.Environment.IsDevelopment()) {
     using var scope = app.Services.CreateScope();
-    await scope.ServiceProvider.GetRequiredService<AuditDb>().Database.MigrateAsync();
+    var database = scope.ServiceProvider.GetRequiredService<AuditDb>().Database;
+    if (sqlite) await database.EnsureCreatedAsync(); else await database.MigrateAsync();
 }
 app.Use(async (context, next) => {
     context.Response.Headers.XContentTypeOptions = "nosniff";
@@ -67,7 +71,7 @@ public sealed class AuditDb(DbContextOptions<AuditDb> options) : DbContext(optio
         entity.HasIndex(x => new { x.OrganizationId, x.OccurredAt });
         entity.Property(x => x.Action).HasMaxLength(120);
         entity.Property(x => x.Entity).HasMaxLength(80);
-        entity.Property(x => x.MetadataJson).HasColumnType("jsonb");
+        entity.Property(x => x.MetadataJson).HasColumnType(Database.IsSqlite() ? "TEXT" : "jsonb");
     }
 }
 public partial class Program { }

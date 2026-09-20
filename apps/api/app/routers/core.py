@@ -25,11 +25,20 @@ def user_json(user: User) -> dict:
 @router.get("/users")
 async def users(
     search: str = "", page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100),
+    role_id: str | None = None, team_id: str | None = None, department_id: str | None = None, status_filter: str | None = Query(None, alias="status"),
     user: User = Depends(require_permission("users.view")), db: AsyncSession = Depends(get_db),
 ):
     clause = User.organization_id == user.organization_id
     if search:
         clause = clause & or_(User.full_name.ilike(f"%{search}%"), User.email.ilike(f"%{search}%"))
+    if role_id:
+        clause = clause & User.roles.any(Role.id == role_id)
+    if team_id:
+        clause = clause & (User.team_id == team_id)
+    if department_id:
+        clause = clause & (User.department_id == department_id)
+    if status_filter in {"active", "inactive"}:
+        clause = clause & (User.is_active.is_(status_filter == "active"))
     total = await db.scalar(select(func.count()).select_from(User).where(clause))
     result = await db.execute(select(User).options(selectinload(User.roles)).where(clause).order_by(User.full_name).offset((page - 1) * page_size).limit(page_size))
     return {"items": [user_json(item) for item in result.scalars()], "total": total, "page": page, "page_size": page_size}
@@ -55,13 +64,14 @@ async def update_user(user_id: str, body: UserUpdate, actor: User = Depends(requ
     target = await db.scalar(select(User).options(selectinload(User.roles)).where(User.id == user_id, User.organization_id == actor.organization_id))
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    old_roles = sorted(role.id for role in target.roles)
     values = body.model_dump(exclude_unset=True, exclude={"role_ids"})
     for key, value in values.items():
         setattr(target, key, value)
     if body.role_ids is not None:
         target.roles = list((await db.scalars(select(Role).where(Role.organization_id == actor.organization_id, Role.id.in_(body.role_ids)))).all())
     await db.commit()
-    await record_audit(actor, "user.updated", "user", target.id, {"active": target.is_active})
+    await record_audit(actor, "user.updated", "user", target.id, {"active": target.is_active, "role_ids": {"old": old_roles, "new": sorted(role.id for role in target.roles)}})
     return user_json(target)
 
 

@@ -7,10 +7,11 @@ from sqlalchemy.orm import selectinload
 
 from ..audit import record_audit
 from ..database import get_db
-from ..dependencies import access_scope, current_user, require_permission
+from ..dependencies import access_scope, current_user, permission_scopes, require_permission
 from ..models import (
     AccessGrant,
     Announcement,
+    Department,
     Event,
     Organization,
     Permission,
@@ -64,11 +65,15 @@ async def role_access(actor: User = Depends(require_permission("roles.manage")),
 
 
 async def replace_grants(db: AsyncSession, actor: User, principal_type: str, principal_id: str, grants: list[GrantInput]):
+    previous = list((await db.scalars(select(AccessGrant).options(selectinload(AccessGrant.permission)).where(AccessGrant.organization_id == actor.organization_id, AccessGrant.principal_type == principal_type, AccessGrant.principal_id == principal_id))).all())
     await db.execute(delete(AccessGrant).where(AccessGrant.organization_id == actor.organization_id, AccessGrant.principal_type == principal_type, AccessGrant.principal_id == principal_id))
     permissions = {p.code: p for p in (await db.scalars(select(Permission).where(Permission.code.in_([g.permission_code for g in grants])))).all()}
     if len(permissions) != len({g.permission_code for g in grants}):
         raise HTTPException(status_code=422, detail="Unknown permission code")
     db.add_all([AccessGrant(organization_id=actor.organization_id, principal_type=principal_type, principal_id=principal_id, permission_id=permissions[g.permission_code].id, scope=g.scope, effect=g.effect) for g in grants])
+    old = {g.permission.code: {"effect": g.effect, "scope": g.scope} for g in previous}
+    new = {g.permission_code: {"effect": g.effect, "scope": g.scope} for g in grants}
+    return [{"permission": code, "old": old.get(code), "new": new.get(code)} for code in sorted(old.keys() | new.keys()) if old.get(code) != new.get(code)]
 
 
 @router.patch("/roles/{role_id}")
@@ -76,8 +81,8 @@ async def update_role(role_id: str, body: RoleUpdate, actor: User = Depends(requ
     role = await db.scalar(select(Role).where(Role.id == role_id, Role.organization_id == actor.organization_id))
     if not role: raise HTTPException(status_code=404, detail="Role not found")
     for key, value in body.model_dump(exclude_unset=True, exclude={"grants"}).items(): setattr(role, key, value)
-    if body.grants is not None: await replace_grants(db, actor, "role", role.id, body.grants)
-    await db.commit(); await record_audit(actor, "role.changed", "role", role.id)
+    changes = await replace_grants(db, actor, "role", role.id, body.grants) if body.grants is not None else []
+    await db.commit(); await record_audit(actor, "role.permissions.changed" if changes else "role.changed", "role", role.id, {"changes": changes})
     return {"id": role.id, "name": role.name}
 
 
@@ -97,9 +102,55 @@ async def duplicate_role(role_id: str, actor: User = Depends(require_permission(
 async def user_grants(user_id: str, body: list[GrantInput], actor: User = Depends(require_permission("users.edit")), db: AsyncSession = Depends(get_db)):
     target = await db.scalar(select(User).where(User.id == user_id, User.organization_id == actor.organization_id))
     if not target: raise HTTPException(status_code=404, detail="User not found")
-    await replace_grants(db, actor, "user", target.id, body); await db.commit()
-    await record_audit(actor, "user.permissions.changed", "user", target.id)
+    changes = await replace_grants(db, actor, "user", target.id, body); await db.commit()
+    await record_audit(actor, "user.permissions.changed", "user", target.id, {"changes": changes})
     return {"updated": True}
+
+
+@router.get("/users/{user_id}/access")
+async def user_access(user_id: str, actor: User = Depends(require_permission("users.view")), db: AsyncSession = Depends(get_db)):
+    target = await db.scalar(select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id == user_id, User.organization_id == actor.organization_id))
+    if not target: raise HTTPException(status_code=404, detail="User not found")
+    role_ids = [role.id for role in target.roles]
+    grants = list((await db.scalars(select(AccessGrant).options(selectinload(AccessGrant.permission)).where(
+        AccessGrant.organization_id == actor.organization_id,
+        ((AccessGrant.principal_type == "user") & (AccessGrant.principal_id == target.id)) |
+        ((AccessGrant.principal_type == "role") & (AccessGrant.principal_id.in_(role_ids))),
+    ))).all())
+    target._access_grants = grants
+    role_grants = [g for g in grants if g.principal_type == "role" and g.effect == "allow"]
+    direct_grants = [g for g in grants if g.principal_type == "user"]
+    return {
+        "user_id": target.id,
+        "role_grants": [{"permission_code": g.permission.code, "scope": g.scope, "effect": g.effect} for g in role_grants],
+        "overrides": [{"permission_code": g.permission.code, "scope": g.scope, "effect": g.effect} for g in direct_grants],
+        "effective": permission_scopes(target),
+    }
+
+
+@router.get("/users/{user_id}/preferences")
+async def admin_user_preferences(user_id: str, actor: User = Depends(require_permission("users.view")), db: AsyncSession = Depends(get_db)):
+    target = await db.scalar(select(User).where(User.id == user_id, User.organization_id == actor.organization_id))
+    if not target: raise HTTPException(status_code=404, detail="User not found")
+    pref = await db.get(UserPreference, target.id)
+    return {"locale": target.locale, "theme": pref.theme if pref else "system", "timezone": pref.timezone if pref else "UTC"}
+
+
+@router.patch("/users/{user_id}/preferences")
+async def admin_update_user_preferences(user_id: str, body: PreferenceUpdate, actor: User = Depends(require_permission("users.edit")), db: AsyncSession = Depends(get_db)):
+    target = await db.scalar(select(User).where(User.id == user_id, User.organization_id == actor.organization_id))
+    if not target: raise HTTPException(status_code=404, detail="User not found")
+    pref = await db.get(UserPreference, target.id)
+    if not pref:
+        pref = UserPreference(user_id=target.id)
+        db.add(pref)
+    if body.locale is not None: target.locale = body.locale
+    for key in ["theme", "sidebar_collapsed", "timezone"]:
+        value = getattr(body, key)
+        if value is not None: setattr(pref, key, value)
+    await db.commit()
+    await record_audit(actor, "user.preferences.changed", "user", target.id, {"locale": target.locale, "theme": pref.theme})
+    return {"locale": target.locale, "theme": pref.theme, "timezone": pref.timezone}
 
 
 @router.get("/preferences")
@@ -197,6 +248,11 @@ async def teams(user: User = Depends(require_permission("teams.view")), db: Asyn
     scope = access_scope(user, "teams.view") or "OWN"; query = select(Team).where(Team.organization_id == user.organization_id)
     if scope != "ORGANIZATION": query = query.where(or_(Team.id == user.team_id, Team.manager_id == user.id))
     return list((await db.scalars(query.order_by(Team.name))).all())
+
+
+@router.get("/departments")
+async def departments(user: User = Depends(require_permission("users.view")), db: AsyncSession = Depends(get_db)):
+    return list((await db.scalars(select(Department).where(Department.organization_id == user.organization_id).order_by(Department.name))).all())
 
 
 @router.post("/teams", status_code=201)

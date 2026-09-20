@@ -41,10 +41,12 @@ async def current_user(
 
 
 def permission_codes(user: User) -> set[str]:
-    codes = {permission.code for role in user.roles for permission in role.permissions}
-    direct_denies = {g.permission.code for g in getattr(user, "_access_grants", []) if g.principal_type == "user" and g.effect == "deny"}
-    direct_allows = {g.permission.code for g in getattr(user, "_access_grants", []) if g.principal_type == "user" and g.effect == "allow"}
-    return (codes | direct_allows) - direct_denies
+    return set(permission_scopes(user))
+
+
+def permission_scopes(user: User) -> dict[str, str]:
+    codes = {g.permission.code for g in getattr(user, "_access_grants", [])}
+    return {code: scope for code in codes if (scope := access_scope(user, code)) is not None}
 
 
 SCOPE_RANK = {"OWN": 0, "TEAM": 1, "DEPARTMENT": 2, "ORGANIZATION": 3}
@@ -63,8 +65,6 @@ def access_scope(user: User, code: str) -> str | None:
     role_scopes = [g.scope for g in grants if g.principal_type == "role" and g.effect == "allow"]
     if role_scopes:
         return max(role_scopes, key=lambda value: SCOPE_RANK[value])
-    if code in {p.code for role in user.roles for p in role.permissions}:
-        return "OWN"
     return None
 
 

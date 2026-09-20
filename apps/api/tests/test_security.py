@@ -29,7 +29,12 @@ def test_tenant_mismatch_is_hidden_as_not_found():
 
 
 def test_permissions_are_aggregated_across_roles():
-    user = SimpleNamespace(roles=[SimpleNamespace(permissions=[SimpleNamespace(code="users.view")]), SimpleNamespace(permissions=[SimpleNamespace(code="tasks.view")])])
+    users_view = SimpleNamespace(code="users.view")
+    tasks_view = SimpleNamespace(code="tasks.view")
+    user = SimpleNamespace(is_platform_admin=False, roles=[], _access_grants=[
+        SimpleNamespace(permission=users_view, principal_type="role", effect="allow", scope="ORGANIZATION"),
+        SimpleNamespace(permission=tasks_view, principal_type="role", effect="allow", scope="OWN"),
+    ])
     assert permission_codes(user) == {"users.view", "tasks.view"}
 
 
@@ -37,6 +42,21 @@ def test_direct_deny_overrides_role_scope():
     permission = SimpleNamespace(code="tasks.view")
     user = SimpleNamespace(is_platform_admin=False, roles=[], _access_grants=[SimpleNamespace(permission=permission, principal_type="role", effect="allow", scope="TEAM"), SimpleNamespace(permission=permission, principal_type="user", effect="deny", scope="OWN")])
     assert access_scope(user, "tasks.view") is None
+
+
+def test_direct_allow_overrides_role_and_inherit_uses_role_scope():
+    permission = SimpleNamespace(code="tasks.view")
+    role = SimpleNamespace(permission=permission, principal_type="role", effect="allow", scope="TEAM")
+    inherited = SimpleNamespace(is_platform_admin=False, roles=[], _access_grants=[role])
+    allowed = SimpleNamespace(is_platform_admin=False, roles=[], _access_grants=[role, SimpleNamespace(permission=permission, principal_type="user", effect="allow", scope="ORGANIZATION")])
+    assert access_scope(inherited, "tasks.view") == "TEAM"
+    assert access_scope(allowed, "tasks.view") == "ORGANIZATION"
+
+
+def test_permission_removal_and_default_deny():
+    user = SimpleNamespace(is_platform_admin=False, roles=[], _access_grants=[])
+    assert access_scope(user, "tasks.delete") is None
+    assert "tasks.delete" not in permission_codes(user)
 
 
 def test_task_visibility_enforces_owner_and_tenant():
