@@ -1,0 +1,11 @@
+import Add from '@mui/icons-material/Add'
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined'
+import ViewListOutlined from '@mui/icons-material/ViewListOutlined'
+import { Box, Button, Card, CardContent, Chip, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { api } from '../api/client'
+import { PageHeader } from '../components/PageHeader'
+import { EmptyState, ErrorState, LoadingState } from '../components/States'
+import type { Task } from '../types'
+export function TasksPage(){const [view,setView]=useState('list');const q=useQuery({queryKey:['tasks'],queryFn:async()=>(await api.get<Task[]>('/tasks')).data});return <><PageHeader title="Tasks" subtitle="Plan and track work across your teams." action={<Button variant="contained" startIcon={<Add/>}>New task</Button>}/><Box sx={{mb:2}}><ToggleButtonGroup exclusive size="small" value={view} onChange={(_,v)=>v&&setView(v)}><ToggleButton value="list" aria-label="List view"><ViewListOutlined/></ToggleButton><ToggleButton value="board" aria-label="Board view"><ViewKanbanOutlined/></ToggleButton></ToggleButtonGroup></Box>{q.isLoading?<LoadingState/>:q.isError?<ErrorState/>:!q.data?.length?<EmptyState title="No tasks yet" description="Create your first task to start organizing work."/>:<Box sx={{display:'grid',gridTemplateColumns:view==='board'?{xs:'1fr',md:'repeat(4,1fr)'}:'1fr',gap:2}}>{q.data.map(task=><Card key={task.id}><CardContent sx={{display:'flex',gap:2,alignItems:{xs:'start',sm:'center'},flexDirection:{xs:'column',sm:'row'}}}><Box sx={{flex:1}}><Typography fontWeight={650}>{task.title}</Typography><Typography variant="body2" color="text.secondary">{task.description||'No description'}</Typography></Box><Chip size="small" label={task.status.replace('_',' ')} variant="outlined"/><Chip size="small" label={task.priority}/></CardContent></Card>)}</Box>}</>}
