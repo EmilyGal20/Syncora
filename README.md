@@ -114,6 +114,10 @@ docker-compose.yml       Complete local stack
 
 Access tokens live in session storage and expire quickly. Refresh tokens are opaque, stored only as SHA-256 hashes server-side, rotated on use, and transported in HttpOnly cookies. Backend dependencies reload current scoped grants for every request, so permission changes affect active sessions without waiting for JWT expiry. Cross-tenant lookups return 404 to reduce resource enumeration.
 
+Every tenant request derives its workspace from the authenticated token. A supplied resource ID never changes that context: database lookups include the current workspace ID, and platform administrators can enter another workspace only through an explicit active membership and the audited workspace-switch endpoint. Organization administrators cannot list, create, switch, or administer other workspaces.
+
+Uploaded files are stored behind the `StorageAdapter` boundary. Development uses the ignored `storage/` directory; clients never receive filesystem paths and downloads are permission- and tenant-checked. `STORAGE_BACKEND`, `STORAGE_LOCAL_ROOT`, and `UPLOAD_MAX_BYTES` configure this layer. The current implementation supports the local adapter and is designed for additional object-storage adapters.
+
 The official source logo remains in `logos/`. Optimized transparent application artwork is under `apps/web/src/assets/brand/` and is used through `SyncoraLogo`; `SyncoraLoader` is a lightweight SVG reserved for login and application initialization.
 
 ## Git Workflow

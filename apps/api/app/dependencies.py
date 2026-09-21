@@ -5,10 +5,10 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import attributes, selectinload
 
 from .database import get_db
-from .models import AccessGrant, Role, User
+from .models import AccessGrant, Organization, Role, User, WorkspaceMembership
 from .security import decode_access_token
 
 bearer = HTTPBearer(auto_error=False)
@@ -25,17 +25,45 @@ async def current_user(
     except jwt.PyJWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired access token") from exc
     result = await db.execute(
-        select(User).options(selectinload(User.roles).selectinload(Role.permissions)).where(User.id == payload.get("sub"))
+        select(User)
+        .options(selectinload(User.roles).selectinload(Role.permissions))
+        .where(User.id == payload.get("sub"))
     )
     user = result.scalar_one_or_none()
-    if not user or not user.is_active or user.organization_id != payload.get("org"):
+    workspace_id = payload.get("org")
+    if not user or not user.is_active or not workspace_id:
         raise HTTPException(status_code=401, detail="Account is unavailable")
+    home_organization_id = user.organization_id
+    if workspace_id != home_organization_id:
+        membership = await db.scalar(
+            select(WorkspaceMembership.id).where(
+                WorkspaceMembership.user_id == user.id,
+                WorkspaceMembership.organization_id == workspace_id,
+                WorkspaceMembership.is_active.is_(True),
+            )
+        )
+        if not user.is_platform_admin or not membership:
+            raise HTTPException(status_code=401, detail="Workspace access is unavailable")
+    workspace = await db.scalar(
+        select(Organization).where(Organization.id == workspace_id, Organization.is_active.is_(True))
+    )
+    if not workspace:
+        raise HTTPException(status_code=401, detail="Workspace is unavailable")
+    user._home_organization_id = home_organization_id
+    user._workspace = workspace
+    attributes.set_committed_value(user, "organization_id", workspace_id)
     role_ids = [role.id for role in user.roles]
-    grants = list((await db.scalars(select(AccessGrant).where(
-        AccessGrant.organization_id == user.organization_id,
-        ((AccessGrant.principal_type == "user") & (AccessGrant.principal_id == user.id)) |
-        ((AccessGrant.principal_type == "role") & (AccessGrant.principal_id.in_(role_ids))),
-    ))).all())
+    grants = list(
+        (
+            await db.scalars(
+                select(AccessGrant).where(
+                    AccessGrant.organization_id == user.organization_id,
+                    ((AccessGrant.principal_type == "user") & (AccessGrant.principal_id == user.id))
+                    | ((AccessGrant.principal_type == "role") & (AccessGrant.principal_id.in_(role_ids))),
+                )
+            )
+        ).all()
+    )
     user._access_grants = grants
     return user
 
@@ -73,9 +101,10 @@ def require_permission(code: str) -> Callable:
         if access_scope(user, code) is None:
             raise HTTPException(status_code=403, detail=f"Permission required: {code}")
         return user
+
     return dependency
 
 
 def assert_tenant(entity_organization_id: str, user: User) -> None:
-    if entity_organization_id != user.organization_id and not user.is_platform_admin:
+    if entity_organization_id != user.organization_id:
         raise HTTPException(status_code=404, detail="Resource not found")

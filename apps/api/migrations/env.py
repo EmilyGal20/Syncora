@@ -24,7 +24,9 @@ def run_offline():
 async def run_async():
     connectable = async_engine_from_config(config.get_section(config.config_ini_section), prefix="sqlalchemy.")
     async with connectable.connect() as connection:
-        await connection.run_sync(lambda conn: context.configure(connection=conn, target_metadata=target_metadata, compare_type=True))
+        await connection.run_sync(
+            lambda conn: context.configure(connection=conn, target_metadata=target_metadata, compare_type=True)
+        )
         await connection.run_sync(lambda _: context.run_migrations())
     await connectable.dispose()
 
@@ -33,4 +35,3 @@ if context.is_offline_mode():
     run_offline()
 else:
     asyncio.run(run_async())
-

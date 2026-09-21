@@ -28,4 +28,3 @@ async def record_audit(user: User, action: str, entity: str, entity_id: str, met
             response.raise_for_status()
     except httpx.HTTPError:
         logger.warning("Audit service unavailable for %s", action)
-

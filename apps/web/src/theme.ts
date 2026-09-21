@@ -1,7 +1,7 @@
 import { createTheme } from '@mui/material/styles'
-export const createSyncoraTheme=(mode:'light'|'dark',direction:'ltr'|'rtl')=>createTheme({
+export const createSyncoraTheme=(mode:'light'|'dark',direction:'ltr'|'rtl',workspacePrimary='#176B5B',workspaceSecondary='#3156C8')=>createTheme({
   direction,
-  palette:{mode,primary:{main:mode==='light'?'#176B5B':'#8370F5',dark:mode==='light'?'#0E4D42':'#6952DD',light:mode==='light'?'#4C9486':'#AB9CFF'},secondary:{main:mode==='light'?'#3156C8':'#35BFEA'},background:{default:mode==='light'?'#F5F7F6':'#111218',paper:mode==='light'?'#FFFFFF':'#1A1B24'},text:{primary:mode==='light'?'#17221F':'#F0F0F7',secondary:mode==='light'?'#5B6864':'#B6B5C7'},divider:mode==='light'?'#DCE3E0':'#353642',error:{main:mode==='light'?'#C43D47':'#F07178'}},
+  palette:{mode,primary:{main:mode==='light'?workspacePrimary:'#8370F5',dark:mode==='light'?'#0E4D42':'#6952DD',light:mode==='light'?'#4C9486':'#AB9CFF'},secondary:{main:mode==='light'?workspaceSecondary:'#35BFEA'},background:{default:mode==='light'?'#F5F7F6':'#111218',paper:mode==='light'?'#FFFFFF':'#1A1B24'},text:{primary:mode==='light'?'#17221F':'#F0F0F7',secondary:mode==='light'?'#5B6864':'#B6B5C7'},divider:mode==='light'?'#DCE3E0':'#353642',error:{main:mode==='light'?'#C43D47':'#F07178'}},
   typography:{fontFamily:'Inter, Segoe UI, sans-serif',h4:{fontSize:'1.65rem',fontWeight:700},h5:{fontSize:'1.2rem',fontWeight:700},h6:{fontSize:'1rem',fontWeight:700},button:{textTransform:'none',fontWeight:650,letterSpacing:0}},
   shape:{borderRadius:6},
   transitions:{duration:{shorter:140,short:180,standard:220}},

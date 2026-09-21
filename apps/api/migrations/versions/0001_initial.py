@@ -1,4 +1,5 @@
 """Initial tenant-aware Syncora schema."""
+
 from alembic import op
 
 from app import models  # noqa: F401
@@ -16,4 +17,3 @@ def upgrade():
 
 def downgrade():
     Base.metadata.drop_all(bind=op.get_bind())
-

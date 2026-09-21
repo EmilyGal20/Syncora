@@ -12,6 +12,7 @@ class ApiModel(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    workspace_slug: str | None = Field(default=None, max_length=80)
 
 
 class TokenResponse(BaseModel):
@@ -38,6 +39,65 @@ class UserSummary(ApiModel):
     roles: list[str] = []
     permissions: list[str] = []
     scopes: dict[str, str] = {}
+    is_platform_admin: bool = False
+    workspace_name: str = ""
+    workspace_slug: str = ""
+    workspace_type: str = "general"
+    workspace_logo_url: str | None = None
+    workspace_primary_color: str = "#176B5B"
+    workspace_secondary_color: str = "#3156C8"
+    enabled_modules: list[str] = []
+
+
+class WorkspaceCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=80)
+    workspace_type: str = Field(default="general", pattern="^(general|band)$")
+    default_locale: str = Field(default="en", pattern="^(en|he)$")
+    timezone: str = Field(default="UTC", max_length=80)
+    currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    primary_color: str = Field(default="#176B5B", pattern=r"^#[0-9A-Fa-f]{6}$")
+    secondary_color: str = Field(default="#3156C8", pattern=r"^#[0-9A-Fa-f]{6}$")
+    enabled_modules: list[str] = []
+    administrator_email: EmailStr
+    administrator_name: str = Field(min_length=2, max_length=160)
+    administrator_password: str = Field(min_length=10, max_length=128)
+
+
+class WorkspaceUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    is_active: bool | None = None
+    default_locale: str | None = Field(default=None, pattern="^(en|he)$")
+    timezone: str | None = Field(default=None, max_length=80)
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    primary_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    secondary_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    enabled_modules: list[str] | None = None
+
+
+class BandResourceInput(BaseModel):
+    title: str = Field(min_length=2, max_length=180)
+    notes: str = ""
+    starts_at: datetime | None = None
+    venue: str = Field(default="", max_length=180)
+    location: str = Field(default="", max_length=180)
+    artist: str = Field(default="", max_length=180)
+    musical_key: str = Field(default="", max_length=20)
+    duration_seconds: int = Field(default=0, ge=0, le=86400)
+
+
+class SetlistItemInput(BaseModel):
+    song_id: str | None = None
+    item_type: str = Field(default="song", pattern="^(song|break|note)$")
+    label: str = Field(default="", max_length=180)
+    notes: str = ""
+
+
+class SetlistInput(BaseModel):
+    title: str = Field(min_length=2, max_length=180)
+    show_id: str | None = None
+    notes: str = ""
+    items: list[SetlistItemInput] = []
 
 
 class UserCreate(BaseModel):

@@ -12,6 +12,7 @@ apps/web/vite.config.d.ts
 coverage/
 playwright-report/
 test-results/
+storage/
 bin/
 obj/
 *.user
@@ -20,3 +21,5 @@ obj/
 .DS_Store
 *.db
 *.sqlite3
+*.db-shm
+*.db-wal

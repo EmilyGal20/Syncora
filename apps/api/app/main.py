@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
-from .routers import auth, core, phase2
+from .routers import auth, band, core, phase2, platform
 from .seed import seed
 
 settings = get_settings()
@@ -55,3 +55,5 @@ async def health():
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(core.router, prefix="/api/v1")
 app.include_router(phase2.router, prefix="/api/v1")
+app.include_router(platform.router, prefix="/api/v1")
+app.include_router(band.router, prefix="/api/v1")

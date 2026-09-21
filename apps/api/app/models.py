@@ -2,7 +2,19 @@ import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, String, Table, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -13,27 +25,32 @@ def uuid4() -> str:
 
 
 user_roles = Table(
-    "user_roles", Base.metadata,
+    "user_roles",
+    Base.metadata,
     Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
     Column("role_id", String(36), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
 )
 role_permissions = Table(
-    "role_permissions", Base.metadata,
+    "role_permissions",
+    Base.metadata,
     Column("role_id", String(36), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
     Column("permission_id", String(36), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
 )
 team_members = Table(
-    "team_members", Base.metadata,
+    "team_members",
+    Base.metadata,
     Column("team_id", String(36), ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True),
     Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
 )
 event_participants = Table(
-    "event_participants", Base.metadata,
+    "event_participants",
+    Base.metadata,
     Column("event_id", String(36), ForeignKey("events.id", ondelete="CASCADE"), primary_key=True),
     Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
 )
 announcement_users = Table(
-    "announcement_users", Base.metadata,
+    "announcement_users",
+    Base.metadata,
     Column("announcement_id", String(36), ForeignKey("announcements.id", ondelete="CASCADE"), primary_key=True),
     Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
 )
@@ -48,7 +65,9 @@ class TaskStatus(str, enum.Enum):
 
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
 
 
 class Organization(Base, TimestampMixin):
@@ -61,6 +80,24 @@ class Organization(Base, TimestampMixin):
     default_theme: Mapped[str] = mapped_column(String(20), default="system")
     allow_user_locale: Mapped[bool] = mapped_column(Boolean, default=True)
     allow_user_theme: Mapped[bool] = mapped_column(Boolean, default=True)
+    workspace_type: Mapped[str] = mapped_column(String(20), default="general")
+    timezone: Mapped[str] = mapped_column(String(80), default="UTC")
+    currency: Mapped[str] = mapped_column(String(3), default="USD")
+    primary_color: Mapped[str] = mapped_column(String(7), default="#176B5B")
+    secondary_color: Mapped[str] = mapped_column(String(7), default="#3156C8")
+    enabled_modules: Mapped[list] = mapped_column(JSON, default=list)
+    logo_storage_key: Mapped[str | None] = mapped_column(String(240))
+    logo_content_type: Mapped[str | None] = mapped_column(String(80))
+
+
+class WorkspaceMembership(Base, TimestampMixin):
+    __tablename__ = "workspace_memberships"
+    __table_args__ = (UniqueConstraint("user_id", "organization_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    access_level: Mapped[str] = mapped_column(String(20), default="administrator")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Department(Base, TimestampMixin):
@@ -126,6 +163,7 @@ class RefreshToken(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"), index=True)
 
 
 class NavigationItem(Base, TimestampMixin):
@@ -240,3 +278,92 @@ class AccessGrant(Base, TimestampMixin):
     scope: Mapped[str] = mapped_column(String(20), default="OWN")
     effect: Mapped[str] = mapped_column(String(10), default="allow")
     permission: Mapped[Permission] = relationship(lazy="joined")
+
+
+class StoredFile(Base, TimestampMixin):
+    __tablename__ = "stored_files"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    uploaded_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    original_filename: Mapped[str] = mapped_column(String(240))
+    display_name: Mapped[str] = mapped_column(String(240))
+    storage_key: Mapped[str] = mapped_column(String(300), unique=True)
+    content_type: Mapped[str] = mapped_column(String(100))
+    size: Mapped[int] = mapped_column(BigInteger)
+    checksum: Mapped[str] = mapped_column(String(64), index=True)
+    context_type: Mapped[str] = mapped_column(String(40), default="workspace")
+    context_id: Mapped[str | None] = mapped_column(String(36), index=True)
+
+
+class BandShow(Base, TimestampMixin):
+    __tablename__ = "band_shows"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    venue: Mapped[str] = mapped_column(String(180), default="")
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+
+class Rehearsal(Base, TimestampMixin):
+    __tablename__ = "rehearsals"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    location: Mapped[str] = mapped_column(String(180), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+
+class Song(Base, TimestampMixin):
+    __tablename__ = "songs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    artist: Mapped[str] = mapped_column(String(180), default="")
+    musical_key: Mapped[str] = mapped_column(String(20), default="")
+    duration_seconds: Mapped[int] = mapped_column(default=0)
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+
+class Setlist(Base, TimestampMixin):
+    __tablename__ = "setlists"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    show_id: Mapped[str | None] = mapped_column(ForeignKey("band_shows.id"))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    items: Mapped[list["SetlistItem"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+
+
+class SetlistItem(Base):
+    __tablename__ = "setlist_items"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    setlist_id: Mapped[str] = mapped_column(ForeignKey("setlists.id", ondelete="CASCADE"), index=True)
+    song_id: Mapped[str | None] = mapped_column(ForeignKey("songs.id"))
+    position: Mapped[int] = mapped_column(default=0)
+    item_type: Mapped[str] = mapped_column(String(20), default="song")
+    label: Mapped[str] = mapped_column(String(180), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    song: Mapped[Song | None] = relationship(lazy="joined")
+
+
+class Equipment(Base, TimestampMixin):
+    __tablename__ = "equipment"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(180))
+    category: Mapped[str] = mapped_column(String(80), default="")
+    status: Mapped[str] = mapped_column(String(30), default="available")
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+
+class Expense(Base, TimestampMixin):
+    __tablename__ = "expenses"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    description: Mapped[str] = mapped_column(String(200))
+    amount_minor: Mapped[int] = mapped_column(default=0)
+    currency: Mapped[str] = mapped_column(String(3), default="USD")
+    incurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))

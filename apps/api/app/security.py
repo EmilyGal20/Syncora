@@ -22,7 +22,12 @@ def verify_password(value: str, hashed: str) -> bool:
 def create_access_token(user_id: str, organization_id: str) -> str:
     now = datetime.now(UTC)
     return jwt.encode(
-        {"sub": user_id, "org": organization_id, "iat": now, "exp": now + timedelta(minutes=settings.access_token_minutes)},
+        {
+            "sub": user_id,
+            "org": organization_id,
+            "iat": now,
+            "exp": now + timedelta(minutes=settings.access_token_minutes),
+        },
         settings.jwt_secret,
         algorithm="HS256",
     )
@@ -39,4 +44,3 @@ def new_refresh_token() -> tuple[str, str]:
 
 def hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
-
