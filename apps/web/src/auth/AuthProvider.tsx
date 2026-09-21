@@ -2,7 +2,7 @@ import { createContext, useContext, useCallback, useEffect, useMemo, useState, t
 import { api } from '../api/client'
 import type { User } from '../types'
 
-interface AuthValue { user:User|null; loading:boolean; login:(email:string,password:string)=>Promise<void>; logout:()=>Promise<void>; switchWorkspace:(id:string)=>Promise<void>; refreshUser:()=>Promise<void>; can:(permission:string)=>boolean; scopeFor:(permission:string)=>string|null }
+interface AuthValue { user:User|null; loading:boolean; login:(identifier:string,password:string)=>Promise<void>; logout:()=>Promise<void>; switchWorkspace:(id:string)=>Promise<void>; refreshUser:()=>Promise<void>; can:(permission:string)=>boolean; scopeFor:(permission:string)=>string|null }
 const AuthContext = createContext<AuthValue | null>(null)
 
 export function AuthProvider({ children }: { children:ReactNode }) {
@@ -16,7 +16,7 @@ export function AuthProvider({ children }: { children:ReactNode }) {
     const timer=setInterval(refresh,15000)
     return()=>{removeEventListener('syncora:unauthorized',reset);removeEventListener('syncora:permissions-changed',refresh);removeEventListener('focus',refresh);clearInterval(timer)}
   }, [loadUser])
-  const login=useCallback(async(email:string,password:string) => { const { data }=await api.post('/auth/login',{email,password}); sessionStorage.setItem('syncora_access_token',data.access_token); setLoading(true); await loadUser() },[loadUser])
+  const login=useCallback(async(identifier:string,password:string) => { const { data }=await api.post('/auth/login',{identifier,password}); sessionStorage.setItem('syncora_access_token',data.access_token); setLoading(true); await loadUser() },[loadUser])
   const logout=useCallback(async() => { await api.post('/auth/logout',{}).catch(()=>undefined); sessionStorage.clear(); setUser(null) },[])
   const switchWorkspace=useCallback(async(id:string)=>{const {data}=await api.post(`/platform/workspaces/${id}/switch`);sessionStorage.setItem('syncora_access_token',data.access_token);setLoading(true);await loadUser()},[loadUser])
   const value=useMemo(()=>({user,loading,login,logout,switchWorkspace,refreshUser:loadUser,can:(p:string)=>Boolean(user?.permissions.includes(p)),scopeFor:(p:string)=>user?.scopes?.[p]??null}),[user,loading,login,logout,switchWorkspace,loadUser])

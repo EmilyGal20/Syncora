@@ -6,9 +6,21 @@ from sqlalchemy.orm import selectinload
 from ..audit import record_audit
 from ..database import get_db
 from ..dependencies import access_scope, current_user, permission_codes, require_permission
-from ..models import Dashboard, NavigationItem, Permission, Role, Task, User, UserPreference
-from ..schemas import NavigationInput, RoleCreate, TaskCreate, UserCreate, UserUpdate
+from ..models import (
+    Dashboard,
+    DashboardAssignment,
+    NavigationItem,
+    Permission,
+    RefreshToken,
+    Role,
+    Task,
+    User,
+    UserPreference,
+)
+from ..realtime import realtime_hub
+from ..schemas import NavigationInput, PasswordReset, RoleCreate, TaskCreate, UserCreate, UserUpdate
 from ..security import hash_password
+from .collaboration import create_notification, notification_json
 
 router = APIRouter(tags=["workspace"])
 
@@ -16,8 +28,15 @@ router = APIRouter(tags=["workspace"])
 def user_json(user: User) -> dict:
     return {
         "id": user.id,
+        "username": user.username,
         "email": user.email,
         "full_name": user.full_name,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+        "job_title": user.job_title,
+        "notes": user.notes,
+        "must_change_password": user.must_change_password,
         "is_active": user.is_active,
         "department_id": user.department_id,
         "team_id": user.team_id,
@@ -42,7 +61,7 @@ async def users(
 ):
     clause = User.organization_id == user.organization_id
     if search:
-        clause = clause & or_(User.full_name.ilike(f"%{search}%"), User.email.ilike(f"%{search}%"))
+        clause = clause & or_(User.full_name.ilike(f"%{search}%"), User.username.ilike(f"%{search}%"), User.email.ilike(f"%{search}%"))
     if role_id:
         clause = clause & User.roles.any(Role.id == role_id)
     if team_id:
@@ -72,11 +91,11 @@ async def users(
 async def create_user(
     body: UserCreate, actor: User = Depends(require_permission("users.create")), db: AsyncSession = Depends(get_db)
 ):
-    exists = await db.scalar(
-        select(User.id).where(User.organization_id == actor.organization_id, User.email == body.email.lower())
-    )
+    username = body.username.strip().lower()
+    email = body.email.lower() if body.email else None
+    exists = await db.scalar(select(User.id).where(User.organization_id == actor.organization_id, or_(User.username == username, User.email == email) if email else User.username == username))
     if exists:
-        raise HTTPException(status_code=409, detail="A user with this email already exists")
+        raise HTTPException(status_code=409, detail="Username or email already exists in this workspace")
     roles = (
         list(
             (
@@ -90,8 +109,14 @@ async def create_user(
     )
     created = User(
         organization_id=actor.organization_id,
-        email=body.email.lower(),
+        username=username,
+        email=email,
         full_name=body.full_name,
+        first_name=body.first_name,
+        last_name=body.last_name,
+        phone=body.phone,
+        job_title=body.job_title,
+        notes=body.notes,
         password_hash=hash_password(body.password),
         department_id=body.department_id,
         team_id=body.team_id,
@@ -102,7 +127,7 @@ async def create_user(
     await db.flush()
     db.add(UserPreference(user_id=created.id, locale=body.locale or "en"))
     await db.commit()
-    await record_audit(actor, "user.created", "user", created.id, {"email": created.email})
+    await record_audit(actor, "user.created", "user", created.id, {"username": created.username})
     return user_json(created)
 
 
@@ -120,6 +145,13 @@ async def update_user(
     )
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if body.username is not None:
+        body.username = body.username.strip().lower()
+    if body.email is not None:
+        body.email = body.email.lower()
+    identity_values = [value for value in (body.username, body.email) if value]
+    if identity_values and await db.scalar(select(User.id).where(User.organization_id == actor.organization_id, User.id != target.id, or_(User.username.in_(identity_values), User.email.in_(identity_values)))):
+        raise HTTPException(status_code=409, detail="Username or email already exists in this workspace")
     old_roles = sorted(role.id for role in target.roles)
     values = body.model_dump(exclude_unset=True, exclude={"role_ids"})
     for key, value in values.items():
@@ -141,6 +173,27 @@ async def update_user(
         {"active": target.is_active, "role_ids": {"old": old_roles, "new": sorted(role.id for role in target.roles)}},
     )
     return user_json(target)
+
+
+@router.post("/users/{user_id}/reset-password", status_code=204)
+async def reset_user_password(
+    user_id: str,
+    body: PasswordReset,
+    actor: User = Depends(require_permission("users.edit")),
+    db: AsyncSession = Depends(get_db),
+):
+    target = await db.scalar(select(User).where(User.id == user_id, User.organization_id == actor.organization_id))
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    target.password_hash = hash_password(body.password)
+    target.must_change_password = body.force_change
+    tokens = (await db.scalars(select(RefreshToken).where(RefreshToken.user_id == target.id, RefreshToken.revoked_at.is_(None)))).all()
+    from datetime import UTC, datetime
+    for token in tokens:
+        token.revoked_at = datetime.now(UTC)
+    await db.commit()
+    await record_audit(actor, "user.password_reset", "user", target.id, {"sessions_revoked": len(tokens), "force_change": body.force_change})
+    return Response(status_code=204)
 
 
 @router.get("/permissions")
@@ -252,10 +305,21 @@ async def delete_navigation(
 
 @router.get("/dashboards/default")
 async def dashboard(user: User = Depends(require_permission("dashboard.view")), db: AsyncSession = Depends(get_db)):
-    value = await db.scalar(
-        select(Dashboard)
-        .options(selectinload(Dashboard.widgets))
-        .where(Dashboard.organization_id == user.organization_id, Dashboard.is_default.is_(True))
+    assignment = await db.scalar(
+        select(DashboardAssignment)
+        .options(selectinload(DashboardAssignment.dashboard).selectinload(Dashboard.widgets))
+        .where(
+            DashboardAssignment.organization_id == user.organization_id,
+            DashboardAssignment.principal_type == "user",
+            DashboardAssignment.principal_id == user.id,
+        )
+    )
+    value = assignment.dashboard if assignment and assignment.dashboard.status == "published" else await db.scalar(
+        select(Dashboard).options(selectinload(Dashboard.widgets)).where(
+            Dashboard.organization_id == user.organization_id,
+            Dashboard.is_default.is_(True),
+            Dashboard.status == "published",
+        )
     )
     if not value:
         raise HTTPException(status_code=404, detail="Dashboard not configured")
@@ -311,5 +375,27 @@ async def create_task(
     values["department_id"] = actor.department_id
     task = Task(organization_id=actor.organization_id, creator_id=actor.id, **values)
     db.add(task)
+    notification = None
+    if task.assignee_id != actor.id:
+        notification = await create_notification(
+            db,
+            organization_id=actor.organization_id,
+            recipient_id=task.assignee_id,
+            event_type="task.assigned",
+            title="A task was assigned to you",
+            message=task.title,
+            resource_type="task",
+            resource_id=task.id,
+            route="/tasks",
+        )
     await db.commit()
+    recipients = {actor.id, task.assignee_id}
+    await realtime_hub.publish(actor.organization_id, "task.created", {"task_id": task.id}, recipients)
+    if notification:
+        await realtime_hub.publish(
+            actor.organization_id,
+            "notification.created",
+            notification_json(notification),
+            {task.assignee_id},
+        )
     return task

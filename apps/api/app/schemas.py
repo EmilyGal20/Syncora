@@ -10,7 +10,8 @@ class ApiModel(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    identifier: str | None = Field(default=None, min_length=1, max_length=254)
+    email: str | None = Field(default=None, max_length=254)
     password: str = Field(min_length=8, max_length=128)
     workspace_slug: str | None = Field(default=None, max_length=80)
 
@@ -27,7 +28,8 @@ class RefreshRequest(BaseModel):
 
 class UserSummary(ApiModel):
     id: str
-    email: EmailStr
+    username: str
+    email: str | None
     full_name: str
     is_active: bool
     organization_id: str
@@ -124,8 +126,14 @@ class ExpenseInput(BaseModel):
 
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    username: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{2,79}$")
+    email: EmailStr | None = None
     full_name: str = Field(min_length=2, max_length=160)
+    first_name: str = Field(default="", max_length=80)
+    last_name: str = Field(default="", max_length=80)
+    phone: str | None = Field(default=None, max_length=40)
+    job_title: str | None = Field(default=None, max_length=120)
+    notes: str | None = None
     password: str = Field(min_length=10, max_length=128)
     role_ids: list[str] = []
     department_id: str | None = None
@@ -134,12 +142,34 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    username: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{2,79}$")
+    email: EmailStr | None = None
     full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    first_name: str | None = Field(default=None, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    phone: str | None = Field(default=None, max_length=40)
+    job_title: str | None = Field(default=None, max_length=120)
+    notes: str | None = None
     is_active: bool | None = None
     role_ids: list[str] | None = None
     department_id: str | None = None
     team_id: str | None = None
     locale: str | None = Field(default=None, pattern="^(en|he)$")
+
+
+class PasswordReset(BaseModel):
+    password: str = Field(min_length=10, max_length=128)
+    force_change: bool = True
+
+
+class DashboardInput(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    status: str = Field(default="draft", pattern="^(draft|published)$")
+    widgets: list[dict] = []
+
+
+class DashboardAssignmentInput(BaseModel):
+    dashboard_id: str
 
 
 class RoleCreate(BaseModel):

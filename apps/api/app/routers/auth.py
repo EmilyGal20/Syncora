@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,6 +20,7 @@ def user_summary(user: User) -> UserSummary:
     workspace = user._workspace
     return UserSummary(
         id=user.id,
+        username=user.username,
         email=user.email,
         full_name=user.full_name,
         is_active=user.is_active,
@@ -76,10 +77,13 @@ async def issue_tokens(
 
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
+    identifier = (body.identifier or body.email or "").strip().lower()
+    if not identifier:
+        raise HTTPException(status_code=422, detail="Username or email is required")
     query = (
         select(User)
         .options(selectinload(User.roles).selectinload(Role.permissions))
-        .where(User.email == body.email.lower())
+        .where(or_(User.username == identifier, User.email == identifier))
     )
     if body.workspace_slug:
         query = query.join(Organization, Organization.id == User.organization_id).where(
@@ -90,7 +94,7 @@ async def login(body: LoginRequest, response: Response, db: AsyncSession = Depen
         raise HTTPException(status_code=409, detail="Workspace selection is required")
     user = users[0] if users else None
     if not user or not user.is_active or not verify_password(body.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid username/email or password")
     user.last_login_at = datetime.now(UTC)
     return await issue_tokens(db, user, response)
 

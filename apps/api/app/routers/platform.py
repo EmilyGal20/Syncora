@@ -211,6 +211,7 @@ async def create_workspace(
     )
     admin = User(
         organization_id=org.id,
+        username=body.administrator_email.split("@", 1)[0].lower(),
         email=body.administrator_email.lower(),
         full_name=body.administrator_name,
         password_hash=hash_password(body.administrator_password),

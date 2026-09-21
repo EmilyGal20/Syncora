@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
-from .routers import auth, band, core, phase2, platform
+from .routers import auth, band, collaboration, core, phase2, platform
 from .seed import seed
 
 settings = get_settings()
@@ -57,7 +57,7 @@ async def health():
         return JSONResponse(
             status_code=503, content={"status": "unhealthy", "service": "syncora-api", "database": "unavailable"}
         )
-    return {"status": "healthy", "service": "syncora-api", "database": "connected"}
+    return {"status": "healthy", "service": "syncora-api", "database": "connected", "realtime": "available"}
 
 
 app.include_router(auth.router, prefix="/api/v1")
@@ -65,3 +65,4 @@ app.include_router(core.router, prefix="/api/v1")
 app.include_router(phase2.router, prefix="/api/v1")
 app.include_router(platform.router, prefix="/api/v1")
 app.include_router(band.router, prefix="/api/v1")
+app.include_router(collaboration.router, prefix="/api/v1")

@@ -22,6 +22,7 @@ from ..models import (
     UserPreference,
     team_members,
 )
+from ..realtime import realtime_hub
 from ..schemas import AnnouncementInput, EventInput, GrantInput, PreferenceUpdate, RoleUpdate, TaskUpdate, TeamInput
 
 router = APIRouter(tags=["phase-2 workspace"])
@@ -231,6 +232,7 @@ async def user_grants(
     changes = await replace_grants(db, actor, "user", target.id, body)
     await db.commit()
     await record_audit(actor, "user.permissions.changed", "user", target.id, {"changes": changes})
+    await realtime_hub.publish(actor.organization_id, "permission.updated", {"user_id": target.id}, {target.id})
     return {"updated": True}
 
 

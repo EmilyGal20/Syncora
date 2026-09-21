@@ -221,6 +221,7 @@ async def seed(db: AsyncSession) -> None:
     await ensure_access_grants(db, org, admin_role, member_role)
     admin = User(
         organization_id=org.id,
+        username="admin",
         email=settings.dev_admin_email.lower(),
         full_name="Demo Administrator",
         password_hash=hash_password(settings.dev_admin_password),
@@ -231,6 +232,7 @@ async def seed(db: AsyncSession) -> None:
     )
     manager = User(
         organization_id=org.id,
+        username="manager",
         email="manager@syncora.dev",
         full_name="Maya Cohen",
         password_hash=hash_password("Manager123!"),
@@ -240,6 +242,7 @@ async def seed(db: AsyncSession) -> None:
     )
     employee = User(
         organization_id=org.id,
+        username="member",
         email="member@syncora.dev",
         full_name="Noah Levi",
         password_hash=hash_password("Member123!"),

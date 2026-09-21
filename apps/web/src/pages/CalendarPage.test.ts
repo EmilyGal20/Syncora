@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { eventFormSchema, eventPayload, type EventForm } from './CalendarPage'
 
-const valid:EventForm={title:'Planning session',description:'Quarterly plan',date:new Date(2026,8,25),start:new Date(2026,8,25,9),end:new Date(2026,8,25,10,30),allDay:false,location:'Room 2',visibility:'team',teamId:'team-1',participants:['user-1']}
+const valid:EventForm={title:'Planning session',description:'Quarterly plan',date:new Date(2026,8,25),endDate:new Date(2026,8,25),start:new Date(2026,8,25,9),end:new Date(2026,8,25,10,30),allDay:false,location:'Room 2',visibility:'team',teamId:'team-1',participants:['user-1']}
 
 describe('calendar event form',()=>{
   it('builds a localized date and time payload for the API',()=>{
@@ -22,5 +22,10 @@ describe('calendar event form',()=>{
     const payload=eventPayload({...valid,allDay:true})
     expect(new Date(payload.starts_at).getHours()).toBe(0)
     expect(new Date(payload.ends_at).getTime()-new Date(payload.starts_at).getTime()).toBe(86_400_000)
+  })
+
+  it('preserves a selected multi-day range',()=>{
+    const payload=eventPayload({...valid,allDay:true,endDate:new Date(2026,8,28)})
+    expect(new Date(payload.ends_at).getTime()-new Date(payload.starts_at).getTime()).toBe(4*86_400_000)
   })
 })

@@ -141,11 +141,22 @@ class Role(Base, TimestampMixin):
 
 class User(Base, TimestampMixin):
     __tablename__ = "users"
-    __table_args__ = (UniqueConstraint("organization_id", "email"),)
+    __table_args__ = (
+        UniqueConstraint("organization_id", "email"),
+        UniqueConstraint("organization_id", "username"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
-    email: Mapped[str] = mapped_column(String(254), index=True)
+    username: Mapped[str] = mapped_column(String(80), index=True, default=lambda: f"user-{uuid.uuid4().hex[:12]}")
+    email: Mapped[str | None] = mapped_column(String(254), index=True)
     full_name: Mapped[str] = mapped_column(String(160))
+    first_name: Mapped[str] = mapped_column(String(80), default="")
+    last_name: Mapped[str] = mapped_column(String(80), default="")
+    phone: Mapped[str | None] = mapped_column(String(40))
+    job_title: Mapped[str | None] = mapped_column(String(120))
+    notes: Mapped[str | None] = mapped_column(Text)
+    avatar_file_id: Mapped[str | None] = mapped_column(String(36))
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -189,7 +200,20 @@ class Dashboard(Base, TimestampMixin):
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     name: Mapped[str] = mapped_column(String(100))
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(20), default="published")
     widgets: Mapped[list["DashboardWidget"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+
+
+class DashboardAssignment(Base, TimestampMixin):
+    __tablename__ = "dashboard_assignments"
+    __table_args__ = (UniqueConstraint("organization_id", "principal_type", "principal_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    dashboard_id: Mapped[str] = mapped_column(ForeignKey("dashboards.id", ondelete="CASCADE"), index=True)
+    principal_type: Mapped[str] = mapped_column(String(20))
+    principal_id: Mapped[str] = mapped_column(String(36), index=True)
+    assigned_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    dashboard: Mapped[Dashboard] = relationship(lazy="joined")
 
 
 class DashboardWidget(Base):
@@ -265,6 +289,21 @@ class UserPreference(Base):
     timezone: Mapped[str] = mapped_column(String(80), default="UTC")
     locale: Mapped[str] = mapped_column(String(12), default="en")
     notifications: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    recipient_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    type: Mapped[str] = mapped_column(String(80), index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    message: Mapped[str] = mapped_column(String(500), default="")
+    resource_type: Mapped[str | None] = mapped_column(String(80))
+    resource_id: Mapped[str | None] = mapped_column(String(36))
+    route: Mapped[str | None] = mapped_column(String(240))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 class AccessGrant(Base, TimestampMixin):
