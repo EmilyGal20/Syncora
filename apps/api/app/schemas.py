@@ -75,6 +75,15 @@ class WorkspaceUpdate(BaseModel):
     enabled_modules: list[str] | None = None
 
 
+class FileRename(BaseModel):
+    display_name: str = Field(min_length=1, max_length=240, pattern=r"^[^\\/\x00-\x1f]+$")
+
+
+class FileAttachmentInput(BaseModel):
+    context_type: str = Field(pattern="^(show|rehearsal|song|task|equipment|expense|band)$")
+    context_id: str = Field(min_length=36, max_length=36)
+
+
 class BandResourceInput(BaseModel):
     title: str = Field(min_length=2, max_length=180)
     notes: str = ""
@@ -98,6 +107,20 @@ class SetlistInput(BaseModel):
     show_id: str | None = None
     notes: str = ""
     items: list[SetlistItemInput] = []
+
+
+class EquipmentInput(BaseModel):
+    name: str = Field(min_length=2, max_length=180)
+    category: str = Field(default="", max_length=80)
+    status: str = Field(default="available", pattern="^(available|assigned|maintenance|retired)$")
+    notes: str = ""
+
+
+class ExpenseInput(BaseModel):
+    description: str = Field(min_length=2, max_length=200)
+    amount_minor: int = Field(ge=0, le=1_000_000_000)
+    currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    incurred_at: datetime
 
 
 class UserCreate(BaseModel):

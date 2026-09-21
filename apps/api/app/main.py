@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
@@ -49,7 +50,14 @@ async def unhandled(_: Request, exc: Exception):
 
 @app.get("/health", tags=["system"])
 async def health():
-    return {"status": "healthy", "service": "syncora-api"}
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+    except Exception:
+        return JSONResponse(
+            status_code=503, content={"status": "unhealthy", "service": "syncora-api", "database": "unavailable"}
+        )
+    return {"status": "healthy", "service": "syncora-api", "database": "connected"}
 
 
 app.include_router(auth.router, prefix="/api/v1")

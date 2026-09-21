@@ -293,6 +293,17 @@ class StoredFile(Base, TimestampMixin):
     checksum: Mapped[str] = mapped_column(String(64), index=True)
     context_type: Mapped[str] = mapped_column(String(40), default="workspace")
     context_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    attachments: Mapped[list["FileAttachment"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+
+
+class FileAttachment(Base, TimestampMixin):
+    __tablename__ = "file_attachments"
+    __table_args__ = (UniqueConstraint("file_id", "context_type", "context_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    file_id: Mapped[str] = mapped_column(ForeignKey("stored_files.id", ondelete="CASCADE"), index=True)
+    context_type: Mapped[str] = mapped_column(String(40))
+    context_id: Mapped[str] = mapped_column(String(36), index=True)
 
 
 class BandShow(Base, TimestampMixin):

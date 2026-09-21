@@ -11,6 +11,7 @@ from starlette.datastructures import Headers
 from app.database import Base
 from app.models import BandShow, Dashboard, Organization, Permission, Setlist, Song, StoredFile, Task, User
 from app.routers import band, platform
+from app.schemas import BandResourceInput, FileAttachmentInput, FileRename
 from app.storage import LocalStorageAdapter
 
 
@@ -54,6 +55,17 @@ async def test_upload_validates_type_size_and_generates_tenant_key(tmp_path, mon
             upload("notes.txt", "text/plain", b"long"), "band-a", "user-a", "workspace", None, storage
         )
     assert oversized.value.status_code == 413
+    monkeypatch.setattr(platform.settings, "upload_max_bytes", 100)
+    with pytest.raises(HTTPException) as disguised:
+        await platform.save_upload(
+            upload("fake.pdf", "application/pdf", b"not a pdf"),
+            "band-a",
+            "user-a",
+            "workspace",
+            None,
+            storage,
+        )
+    assert disguised.value.status_code == 415
 
 
 @pytest.mark.asyncio
@@ -157,3 +169,84 @@ async def test_band_resource_ids_cannot_cross_tenant(database):
     with pytest.raises(HTTPException) as setlist_denied:
         await band.setlist_detail(beta_setlist.id, user=alpha, db=database)
     assert setlist_denied.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_file_rename_attach_conflict_detach_and_delete(database, tmp_path, monkeypatch):
+    monkeypatch.setattr(platform, "record_audit", AsyncMock())
+    org = Organization(name="Band Alpha", slug="alpha-files")
+    database.add(org)
+    await database.flush()
+    user = User(organization_id=org.id, email="files@alpha.test", full_name="Files Admin", password_hash="x")
+    song = Song(organization_id=org.id, title="Opening Song")
+    database.add_all([user, song])
+    await database.flush()
+    storage = LocalStorageAdapter(str(tmp_path / "files"))
+    key = f"{org.id}/notes.txt"
+    await storage.put(key, b"stage notes")
+    item = StoredFile(
+        organization_id=org.id,
+        uploaded_by=user.id,
+        original_filename="notes.txt",
+        display_name="notes.txt",
+        storage_key=key,
+        content_type="text/plain",
+        size=11,
+        checksum="b" * 64,
+    )
+    database.add(item)
+    await database.commit()
+
+    renamed = await platform.rename_file(item.id, FileRename(display_name="Stage notes.txt"), user=user, db=database)
+    assert renamed["display_name"] == "Stage notes.txt"
+    body = FileAttachmentInput(context_type="song", context_id=song.id)
+    link = await platform.attach_file(item.id, body, user=user, db=database)
+    with pytest.raises(HTTPException) as duplicate:
+        await platform.attach_file(item.id, body, user=user, db=database)
+    assert duplicate.value.status_code == 409
+    with pytest.raises(HTTPException) as referenced:
+        await platform.delete_file(item.id, user=user, db=database, storage=storage)
+    assert referenced.value.status_code == 409
+    await platform.detach_file(item.id, link["id"], user=user, db=database)
+    response = await platform.delete_file(item.id, user=user, db=database, storage=storage)
+    assert response.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_show_crud_is_tenant_qualified_and_module_gated(database, monkeypatch):
+    monkeypatch.setattr(band, "record_audit", AsyncMock())
+    alpha_org = Organization(name="Alpha CRUD", slug="alpha-crud", enabled_modules=["shows"])
+    beta_org = Organization(name="Beta CRUD", slug="beta-crud", enabled_modules=["shows"])
+    database.add_all([alpha_org, beta_org])
+    await database.flush()
+    alpha = User(organization_id=alpha_org.id, email="crud@alpha.test", full_name="Alpha Admin", password_hash="x")
+    beta = User(organization_id=beta_org.id, email="crud@beta.test", full_name="Beta Admin", password_hash="x")
+    database.add_all([alpha, beta])
+    await database.flush()
+    permission = Permission(code="shows.manage", group="Band")
+    grant = SimpleNamespace(permission=permission, principal_type="user", effect="allow", scope="ORGANIZATION")
+    alpha._access_grants = [grant]
+    beta._access_grants = [grant]
+    alpha._workspace = alpha_org
+    beta._workspace = beta_org
+    starts = platform.datetime.now(platform.UTC)
+    created = await band.create_resource(
+        "shows", BandResourceInput(title="Alpha Show", venue="Club", starts_at=starts), user=alpha, db=database
+    )
+    updated = await band.update_resource(
+        "shows",
+        created.id,
+        BandResourceInput(title="Alpha Show Updated", venue="Arena", starts_at=starts),
+        user=alpha,
+        db=database,
+    )
+    assert updated.title == "Alpha Show Updated"
+    with pytest.raises(HTTPException) as cross_tenant:
+        await band.delete_resource("shows", created.id, user=beta, db=database)
+    assert cross_tenant.value.status_code == 404
+    await band.delete_resource("shows", created.id, user=alpha, db=database)
+    assert not await database.get(BandShow, created.id)
+    alpha_org.enabled_modules = []
+    with pytest.raises(HTTPException) as disabled:
+        await band.resources("shows", user=alpha, db=database)
+    assert disabled.value.status_code == 404

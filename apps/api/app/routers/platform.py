@@ -22,18 +22,24 @@ from ..database import get_db
 from ..dependencies import access_scope, current_user, require_permission
 from ..models import (
     AccessGrant,
+    BandShow,
     Dashboard,
+    Equipment,
+    Expense,
+    FileAttachment,
     NavigationItem,
     Organization,
     Permission,
+    Rehearsal,
     Role,
+    Song,
     StoredFile,
     Task,
     User,
     UserPreference,
     WorkspaceMembership,
 )
-from ..schemas import WorkspaceCreate, WorkspaceUpdate
+from ..schemas import FileAttachmentInput, FileRename, WorkspaceCreate, WorkspaceUpdate
 from ..security import hash_password
 from ..storage import StorageAdapter, get_storage
 from .auth import issue_tokens
@@ -69,6 +75,38 @@ ALLOWED_FILES = {
     ".m4a": "audio/mp4",
 }
 LOGO_FILES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+PREVIEW_TYPES = {
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "text/plain",
+    "text/csv",
+    "audio/mpeg",
+    "audio/wav",
+    "audio/mp4",
+}
+
+
+def valid_signature(content: bytes, content_type: str) -> bool:
+    signatures = {
+        "application/pdf": content.startswith(b"%PDF-"),
+        "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/jpeg": content.startswith(b"\xff\xd8\xff"),
+        "image/webp": content.startswith(b"RIFF") and content[8:12] == b"WEBP",
+        "audio/mpeg": content.startswith(b"ID3") or content.startswith(b"\xff"),
+        "audio/wav": content.startswith(b"RIFF") and content[8:12] == b"WAVE",
+        "audio/mp4": len(content) > 12 and content[4:8] == b"ftyp",
+    }
+    if content_type in {"text/plain", "text/csv"}:
+        try:
+            content.decode("utf-8")
+            return b"\x00" not in content
+        except UnicodeDecodeError:
+            return False
+    if "officedocument" in content_type or "spreadsheetml" in content_type:
+        return content.startswith(b"PK\x03\x04")
+    return signatures.get(content_type, False)
 
 
 def require_platform(user: User = Depends(current_user)) -> User:
@@ -189,6 +227,17 @@ async def create_workspace(
         ("Files", "Folder", "/files", "files.view", 30),
         ("Administration", "AdminPanelSettings", "/admin", "users.view", 90),
     ]
+    band_nav = {
+        "shows": ("Shows", "Event", "/band/shows", "shows.view"),
+        "rehearsals": ("Rehearsals", "MusicNote", "/band/rehearsals", "rehearsals.view"),
+        "songs": ("Songs", "LibraryMusic", "/band/songs", "songs.view"),
+        "setlists": ("Setlists", "QueueMusic", "/band/setlists", "setlists.view"),
+        "equipment": ("Equipment", "Inventory2", "/band/equipment", "equipment.view"),
+        "expenses": ("Expenses", "ReceiptLong", "/band/expenses", "expenses.view"),
+    }
+    nav.extend(
+        [(*band_nav[module], 40 + index) for index, module in enumerate(body.enabled_modules) if module in band_nav]
+    )
     db.add_all(
         [
             NavigationItem(
@@ -283,6 +332,8 @@ async def save_upload(
     content = await upload.read(settings.upload_max_bytes + 1)
     if len(content) > settings.upload_max_bytes:
         raise HTTPException(status_code=413, detail="File exceeds upload limit")
+    if not valid_signature(content, expected):
+        raise HTTPException(status_code=415, detail="File content does not match its declared type")
     key = f"{organization_id}/{uuid4().hex}{extension}"
     await storage.put(key, content)
     return StoredFile(
@@ -310,7 +361,45 @@ def file_json(item: StoredFile) -> dict:
         "context_id": item.context_id,
         "uploaded_by": item.uploaded_by,
         "created_at": item.created_at,
+        "attachments": [
+            {"id": link.id, "context_type": link.context_type, "context_id": link.context_id}
+            for link in item.attachments
+        ],
     }
+
+
+async def tenant_file(file_id: str, organization_id: str, db: AsyncSession) -> StoredFile:
+    item = await db.scalar(
+        select(StoredFile)
+        .options(selectinload(StoredFile.attachments))
+        .where(StoredFile.id == file_id, StoredFile.organization_id == organization_id)
+        .execution_options(populate_existing=True)
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="File not found")
+    return item
+
+
+async def validate_attachment_target(body: FileAttachmentInput, organization_id: str, db: AsyncSession) -> None:
+    models = {
+        "show": BandShow,
+        "rehearsal": Rehearsal,
+        "song": Song,
+        "task": Task,
+        "equipment": Equipment,
+        "expense": Expense,
+    }
+    if body.context_type == "band":
+        exists = await db.scalar(
+            select(Organization.id).where(Organization.id == body.context_id, Organization.id == organization_id)
+        )
+    else:
+        model = models[body.context_type]
+        exists = await db.scalar(
+            select(model.id).where(model.id == body.context_id, model.organization_id == organization_id)
+        )
+    if not exists:
+        raise HTTPException(status_code=404, detail="Attachment target not found")
 
 
 @router.get("/files")
@@ -340,6 +429,7 @@ async def upload_file(
     item = await save_upload(file, user.organization_id, user.id, context_type, context_id, storage)
     db.add(item)
     await db.commit()
+    await db.refresh(item, attribute_names=["attachments"])
     await record_audit(
         user, "file.uploaded", "file", item.id, {"name": item.display_name, "size": item.size, "context": context_type}
     )
@@ -353,11 +443,7 @@ async def download_file(
     db: AsyncSession = Depends(get_db),
     storage: StorageAdapter = Depends(get_storage),
 ):
-    item = await db.scalar(
-        select(StoredFile).where(StoredFile.id == file_id, StoredFile.organization_id == user.organization_id)
-    )
-    if not item:
-        raise HTTPException(status_code=404, detail="File not found")
+    item = await tenant_file(file_id, user.organization_id, db)
     content = await storage.read(item.storage_key)
     safe = re.sub(r"[^A-Za-z0-9._ -]", "_", item.display_name)
     await record_audit(user, "file.downloaded", "file", item.id, {"name": safe})
@@ -368,6 +454,96 @@ async def download_file(
     )
 
 
+@router.get("/files/{file_id}/preview")
+async def preview_file(
+    file_id: str,
+    user: User = Depends(require_permission("files.view")),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageAdapter = Depends(get_storage),
+):
+    item = await tenant_file(file_id, user.organization_id, db)
+    if item.content_type not in PREVIEW_TYPES:
+        raise HTTPException(status_code=415, detail="Preview is not available for this file type")
+    safe = re.sub(r"[^A-Za-z0-9._ -]", "_", item.display_name)
+    return StreamingResponse(
+        io.BytesIO(await storage.read(item.storage_key)),
+        media_type=item.content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{safe}"',
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+        },
+    )
+
+
+@router.patch("/files/{file_id}")
+async def rename_file(
+    file_id: str,
+    body: FileRename,
+    user: User = Depends(require_permission("files.upload")),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await tenant_file(file_id, user.organization_id, db)
+    old_name = item.display_name
+    item.display_name = body.display_name.strip()
+    await db.commit()
+    await record_audit(user, "file.renamed", "file", item.id, {"old_name": old_name, "new_name": item.display_name})
+    return file_json(item)
+
+
+@router.post("/files/{file_id}/attachments", status_code=201)
+async def attach_file(
+    file_id: str,
+    body: FileAttachmentInput,
+    user: User = Depends(require_permission("files.upload")),
+    db: AsyncSession = Depends(get_db),
+):
+    item = await tenant_file(file_id, user.organization_id, db)
+    await validate_attachment_target(body, user.organization_id, db)
+    existing = await db.scalar(
+        select(FileAttachment).where(
+            FileAttachment.file_id == item.id,
+            FileAttachment.context_type == body.context_type,
+            FileAttachment.context_id == body.context_id,
+        )
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="File is already attached to this resource")
+    link = FileAttachment(
+        organization_id=user.organization_id,
+        file_id=item.id,
+        context_type=body.context_type,
+        context_id=body.context_id,
+    )
+    db.add(link)
+    await db.commit()
+    await record_audit(user, "file.attached", "file", item.id, body.model_dump())
+    return {"id": link.id, **body.model_dump()}
+
+
+@router.delete("/files/{file_id}/attachments/{attachment_id}", status_code=204)
+async def detach_file(
+    file_id: str,
+    attachment_id: str,
+    user: User = Depends(require_permission("files.upload")),
+    db: AsyncSession = Depends(get_db),
+):
+    await tenant_file(file_id, user.organization_id, db)
+    link = await db.scalar(
+        select(FileAttachment).where(
+            FileAttachment.id == attachment_id,
+            FileAttachment.file_id == file_id,
+            FileAttachment.organization_id == user.organization_id,
+        )
+    )
+    if not link:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    await db.delete(link)
+    await db.commit()
+    await record_audit(user, "file.detached", "file", file_id, {"attachment_id": attachment_id})
+    return Response(status_code=204)
+
+
 @router.delete("/files/{file_id}", status_code=204)
 async def delete_file(
     file_id: str,
@@ -375,11 +551,9 @@ async def delete_file(
     db: AsyncSession = Depends(get_db),
     storage: StorageAdapter = Depends(get_storage),
 ):
-    item = await db.scalar(
-        select(StoredFile).where(StoredFile.id == file_id, StoredFile.organization_id == user.organization_id)
-    )
-    if not item:
-        raise HTTPException(status_code=404, detail="File not found")
+    item = await tenant_file(file_id, user.organization_id, db)
+    if item.attachments:
+        raise HTTPException(status_code=409, detail="Detach this file from its resources before deleting it")
     await storage.delete(item.storage_key)
     await db.delete(item)
     await db.commit()
