@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
-from .routers import auth, band, collaboration, core, phase2, platform
+from .routers import auth, band, collaboration, core, phase2, platform, requests_support
 from .seed import seed
 
 settings = get_settings()
@@ -66,3 +66,4 @@ app.include_router(phase2.router, prefix="/api/v1")
 app.include_router(platform.router, prefix="/api/v1")
 app.include_router(band.router, prefix="/api/v1")
 app.include_router(collaboration.router, prefix="/api/v1")
+app.include_router(requests_support.router, prefix="/api/v1")

@@ -306,6 +306,80 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
+class RegistrationRequest(Base, TimestampMixin):
+    __tablename__ = "registration_requests"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    desired_username: Mapped[str] = mapped_column(String(80), index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    first_name: Mapped[str] = mapped_column(String(80))
+    last_name: Mapped[str] = mapped_column(String(80))
+    display_name: Mapped[str] = mapped_column(String(160))
+    email: Mapped[str | None] = mapped_column(String(254), index=True)
+    phone: Mapped[str | None] = mapped_column(String(40))
+    preferred_locale: Mapped[str] = mapped_column(String(12), default="en")
+    timezone: Mapped[str] = mapped_column(String(80), default="UTC")
+    workspace_mode: Mapped[str] = mapped_column(String(20))
+    workspace_type: Mapped[str] = mapped_column(String(30))
+    requested_workspace_name: Mapped[str] = mapped_column(String(160), index=True)
+    requested_role: Mapped[str] = mapped_column(String(120), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
+    resolved_organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"), index=True)
+    reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applicant_response: Mapped[str] = mapped_column(Text, default="")
+    internal_note: Mapped[str] = mapped_column(Text, default="")
+
+
+class RegistrationReviewEvent(Base):
+    __tablename__ = "registration_review_events"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    request_id: Mapped[str] = mapped_column(ForeignKey("registration_requests.id", ondelete="CASCADE"), index=True)
+    actor_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column(String(40))
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class BandMemberProfile(Base, TimestampMixin):
+    __tablename__ = "band_member_profiles"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    stage_name: Mapped[str] = mapped_column(String(160), default="")
+    instruments: Mapped[list] = mapped_column(JSON, default=list)
+    band_role: Mapped[str] = mapped_column(String(120), default="")
+    public_details: Mapped[str] = mapped_column(Text, default="")
+
+
+class SupportTicket(Base, TimestampMixin):
+    __tablename__ = "support_tickets"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"), index=True)
+    requester_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    requester_name: Mapped[str] = mapped_column(String(160))
+    contact: Mapped[str | None] = mapped_column(String(254))
+    guest_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    category: Mapped[str] = mapped_column(String(40), index=True)
+    subject: Mapped[str] = mapped_column(String(180))
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30), default="OPEN", index=True)
+    priority: Mapped[str] = mapped_column(String(20), default="NORMAL")
+    current_route: Mapped[str | None] = mapped_column(String(240))
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("support_tickets.id", ondelete="CASCADE"), index=True)
+    author_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    author_name: Mapped[str] = mapped_column(String(160))
+    body: Mapped[str] = mapped_column(Text)
+    is_internal: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
 class AccessGrant(Base, TimestampMixin):
     __tablename__ = "access_grants"
     __table_args__ = (UniqueConstraint("organization_id", "principal_type", "principal_id", "permission_id"),)

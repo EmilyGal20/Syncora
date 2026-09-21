@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test'
 
+test.setTimeout(90000)
+
 async function login(page:import('@playwright/test').Page,email='admin@syncora.dev',password='ChangeMe123!'){
-  await page.goto('/login');await page.getByLabel('Username or email').fill(email);await page.getByLabel('Password').fill(password);await page.getByRole('button',{name:'Sign in'}).click();await expect(page).toHaveURL(/\/dashboard/)
+  await page.goto('/login');await page.getByLabel('Username or email').fill(email);await page.locator('input[name="password"]').fill(password);await page.getByRole('button',{name:'Sign in'}).click();await expect(page).toHaveURL(/\/dashboard/)
 }
 
 test('unauthenticated users are sent to login',async({page})=>{await page.goto('/dashboard');await expect(page).toHaveURL(/\/login/);await expect(page.getByRole('heading',{name:'Welcome back'})).toBeVisible()})

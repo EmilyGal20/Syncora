@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -9,6 +9,7 @@ from ..config import get_settings
 from ..database import get_db
 from ..dependencies import current_user, permission_codes, permission_scopes
 from ..models import Organization, RefreshToken, Role, User, WorkspaceMembership
+from ..rate_limit import public_limiter
 from ..schemas import LoginRequest, RefreshRequest, TokenResponse, UserSummary
 from ..security import create_access_token, hash_token, new_refresh_token, verify_password
 
@@ -76,7 +77,8 @@ async def issue_tokens(
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
+async def login(body: LoginRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    public_limiter.check(request, f"login:{(body.identifier or body.email or '').lower()}", 30, 300)
     identifier = (body.identifier or body.email or "").strip().lower()
     if not identifier:
         raise HTTPException(status_code=422, detail="Username or email is required")

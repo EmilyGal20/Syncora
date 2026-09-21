@@ -172,6 +172,57 @@ class DashboardAssignmentInput(BaseModel):
     dashboard_id: str
 
 
+class RegistrationRequestInput(BaseModel):
+    username: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{2,79}$")
+    password: str = Field(min_length=10, max_length=128)
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
+    display_name: str = Field(min_length=2, max_length=160)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=40)
+    preferred_locale: str = Field(default="en", pattern="^(en|he)$")
+    timezone: str = Field(default="UTC", max_length=80)
+    workspace_mode: str = Field(pattern="^(existing|new)$")
+    workspace_type: str = Field(pattern="^(band|organization|creative|other)$")
+    workspace_name: str = Field(min_length=2, max_length=160)
+    requested_role: str = Field(default="", max_length=120)
+    description: str = Field(default="", max_length=2000)
+    details: dict = {}
+
+
+class RegistrationDecision(BaseModel):
+    organization_id: str
+    role_ids: list[str] = []
+    dashboard_id: str | None = None
+    team_id: str | None = None
+    department_id: str | None = None
+    applicant_response: str = Field(default="", max_length=1000)
+    internal_note: str = Field(default="", max_length=2000)
+
+
+class RegistrationReject(BaseModel):
+    applicant_response: str = Field(default="", max_length=1000)
+    internal_note: str = Field(default="", max_length=2000)
+
+
+class SupportTicketInput(BaseModel):
+    category: str = Field(pattern="^(login|access|bug|information|file|calendar|band|dashboard|other)$")
+    subject: str = Field(min_length=3, max_length=180)
+    description: str = Field(min_length=5, max_length=5000)
+    requester_name: str = Field(default="", max_length=160)
+    contact: str | None = Field(default=None, max_length=254)
+    current_route: str | None = Field(default=None, max_length=240)
+
+
+class SupportMessageInput(BaseModel):
+    body: str = Field(min_length=1, max_length=5000)
+    internal: bool = False
+
+
+class SupportStatusInput(BaseModel):
+    status: str = Field(pattern="^(OPEN|IN_PROGRESS|WAITING_FOR_USER|RESOLVED|CLOSED)$")
+
+
 class RoleCreate(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     description: str = Field(default="", max_length=240)

@@ -80,6 +80,11 @@ PERMISSIONS = [
     "expenses.view",
     "expenses.manage",
     "expenses.export_excel",
+    "access_requests.manage",
+    "support.view",
+    "support.reply",
+    "support.manage",
+    "support.internal_notes",
 ]
 
 
