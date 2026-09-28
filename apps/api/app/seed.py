@@ -85,6 +85,12 @@ PERMISSIONS = [
     "support.reply",
     "support.manage",
     "support.internal_notes",
+    "notes.view_own",
+    "notes.create",
+    "notes.edit_own",
+    "notes.delete_own",
+    "notes.view_shared",
+    "notes.manage_shared",
 ]
 
 
@@ -143,6 +149,10 @@ async def ensure_access_grants(db: AsyncSession, org: Organization, admin_role: 
         "schedule.create",
         "teams.view",
         "announcements.view",
+        "notes.view_own",
+        "notes.create",
+        "notes.edit_own",
+        "notes.delete_own",
     }
     db.add_all(
         [
@@ -188,6 +198,24 @@ async def seed(db: AsyncSession) -> None:
                             user_id=platform.id, organization_id=existing_org.id, access_level="administrator"
                         )
                     )
+            notes_nav = await db.scalar(
+                select(NavigationItem).where(
+                    NavigationItem.organization_id == existing_org.id, NavigationItem.route == "/notes"
+                )
+            )
+            if not notes_nav:
+                db.add(
+                    NavigationItem(
+                        organization_id=existing_org.id,
+                        title="Notes",
+                        title_en="Notes",
+                        title_he="Notes",
+                        icon="Notes",
+                        route="/notes",
+                        required_permission="notes.view_own",
+                        order=25,
+                    )
+                )
             await db.commit()
         return
     settings = get_settings()
@@ -263,6 +291,7 @@ async def seed(db: AsyncSession) -> None:
         ("Dashboard", "Dashboard", "/dashboard", None, 0),
         ("My Work", "CheckCircle", "/tasks", "tasks.view", 10),
         ("Schedule", "CalendarMonth", "/schedule", "schedule.view", 20),
+        ("Notes", "Notes", "/notes", "notes.view_own", 25),
         ("Teams", "Groups", "/teams", "teams.view", 30),
         ("Announcements", "Campaign", "/announcements", "announcements.view", 40),
         ("Administration", "AdminPanelSettings", "/admin", "users.view", 90),

@@ -8,6 +8,11 @@ services:
     ports: ["5432:5432"]
     volumes: ["syncora_pg:/var/lib/postgresql/data"]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U syncora"], interval: 5s, timeout: 5s, retries: 10 }
+  mongodb:
+    image: mongo:8
+    ports: ["27017:27017"]
+    volumes: ["syncora_mongo:/data/db"]
+    healthcheck: { test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"], interval: 5s, timeout: 5s, retries: 10 }
   audit:
     build: apps/services/Syncora.Audit
     environment:
@@ -26,10 +31,12 @@ services:
       CORS_ORIGIN_REGEX: ""
       AUDIT_SERVICE_URL: http://audit:8501
       AUDIT_SERVICE_KEY: development-audit-key
-    depends_on: { postgres: { condition: service_healthy }, audit: { condition: service_started } }
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: syncora
+    depends_on: { postgres: { condition: service_healthy }, mongodb: { condition: service_healthy }, audit: { condition: service_started } }
     ports: ["8500:8500"]
   web:
     build: { context: apps/web, args: { VITE_API_URL: "" } }
     depends_on: [api]
     ports: ["8600:8600"]
-volumes: { syncora_pg: {} }
+volumes: { syncora_pg: {}, syncora_mongo: {} }

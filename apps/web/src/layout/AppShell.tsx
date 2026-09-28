@@ -7,6 +7,7 @@ import Groups from '@mui/icons-material/Groups'
 import FolderOutlined from '@mui/icons-material/FolderOutlined'
 import HelpOutline from '@mui/icons-material/HelpOutline'
 import MenuIcon from '@mui/icons-material/Menu'
+import NotesOutlined from '@mui/icons-material/NotesOutlined'
 import Search from '@mui/icons-material/Search'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import SpaceDashboard from '@mui/icons-material/SpaceDashboard'
@@ -22,7 +23,7 @@ import { RealtimeBridge } from '../components/RealtimeBridge'
 import type { NavItem } from '../types'
 
 const width=248
-const iconMap:Record<string,ElementType>={Dashboard:SpaceDashboard,CheckCircle:CheckCircleOutline,CalendarMonth,Groups,Campaign,AdminPanelSettings,Folder:FolderOutlined,Circle:CircleOutlined}
+const iconMap:Record<string,ElementType>={Dashboard:SpaceDashboard,CheckCircle:CheckCircleOutline,CalendarMonth,Notes:NotesOutlined,Groups,Campaign,AdminPanelSettings,Folder:FolderOutlined,Circle:CircleOutlined}
 interface Workspace{id:string;name:string;workspace_type:string;logo_url:string|null}
 
 export function AppShell(){

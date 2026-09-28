@@ -5,13 +5,14 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..audit import record_audit
 from ..config import get_settings
 from ..database import get_db
-from ..dependencies import current_user, permission_codes, permission_scopes
+from ..dependencies import authenticated_user, permission_codes, permission_scopes
 from ..models import Organization, RefreshToken, Role, User, WorkspaceMembership
 from ..rate_limit import public_limiter
-from ..schemas import LoginRequest, RefreshRequest, TokenResponse, UserSummary
-from ..security import create_access_token, hash_token, new_refresh_token, verify_password
+from ..schemas import ChangePassword, LoginRequest, RefreshRequest, TokenResponse, UserSummary
+from ..security import create_access_token, hash_password, hash_token, new_refresh_token, verify_password
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 settings = get_settings()
@@ -42,6 +43,7 @@ def user_summary(user: User) -> UserSummary:
         workspace_primary_color=workspace.primary_color,
         workspace_secondary_color=workspace.secondary_color,
         enabled_modules=workspace.enabled_modules or [],
+        must_change_password=user.must_change_password,
     )
 
 
@@ -157,5 +159,22 @@ async def logout(
 
 
 @router.get("/me", response_model=UserSummary)
-async def me(user: User = Depends(current_user)):
+async def me(user: User = Depends(authenticated_user)):
     return user_summary(user)
+
+
+@router.post("/change-password", status_code=204)
+async def change_password(body: ChangePassword, user: User = Depends(authenticated_user), db: AsyncSession = Depends(get_db)):
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if verify_password(body.new_password, user.password_hash):
+        raise HTTPException(status_code=422, detail="Choose a different password")
+    user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False
+    tokens = (await db.scalars(select(RefreshToken).where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None)))).all()
+    now = datetime.now(UTC)
+    for token in tokens:
+        token.revoked_at = now
+    await db.commit()
+    await record_audit(user, "user.password_changed", "user", user.id, {"sessions_revoked": len(tokens)})
+    return Response(status_code=204)

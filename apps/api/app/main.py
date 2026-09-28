@@ -7,7 +7,9 @@ from sqlalchemy import text
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
-from .routers import auth, band, collaboration, core, phase2, platform, requests_support
+from .infrastructure.mongodb import mongo
+from .infrastructure.mongodb.migration import migrate_compatibility_documents
+from .routers import auth, band, collaboration, core, notes, phase2, platform, requests_support
 from .seed import seed
 
 settings = get_settings()
@@ -15,12 +17,15 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    await mongo.connect()
     if settings.environment == "development":
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         async with SessionLocal() as db:
             await seed(db)
+            await migrate_compatibility_documents(db)
     yield
+    await mongo.close()
 
 
 app = FastAPI(title="Syncora API", version="0.1.0", lifespan=lifespan)
@@ -57,7 +62,14 @@ async def health():
         return JSONResponse(
             status_code=503, content={"status": "unhealthy", "service": "syncora-api", "database": "unavailable"}
         )
-    return {"status": "healthy", "service": "syncora-api", "database": "connected", "realtime": "available"}
+    return {
+        "status": "healthy" if mongo.available else "degraded",
+        "service": "syncora-api",
+        "postgresql": "connected",
+        "mongodb": "connected" if mongo.available else "unavailable",
+        "audit": "configured",
+        "realtime": "available",
+    }
 
 
 app.include_router(auth.router, prefix="/api/v1")
@@ -67,3 +79,4 @@ app.include_router(platform.router, prefix="/api/v1")
 app.include_router(band.router, prefix="/api/v1")
 app.include_router(collaboration.router, prefix="/api/v1")
 app.include_router(requests_support.router, prefix="/api/v1")
+app.include_router(notes.router, prefix="/api/v1")

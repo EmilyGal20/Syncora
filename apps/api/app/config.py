@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     storage_backend: str = "local"
     storage_local_root: str = "./storage"
     upload_max_bytes: int = 25 * 1024 * 1024
+    mongodb_uri: str = "mongodb://localhost:27017"
+    mongodb_database: str = "syncora_dev"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

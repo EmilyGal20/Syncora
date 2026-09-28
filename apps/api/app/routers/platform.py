@@ -427,6 +427,10 @@ async def upload_file(
     db: AsyncSession = Depends(get_db),
     storage: StorageAdapter = Depends(get_storage),
 ):
+    if context_type != "workspace":
+        if not context_id:
+            raise HTTPException(status_code=422, detail="A context identifier is required")
+        await validate_attachment_target(FileAttachmentInput(context_type=context_type, context_id=context_id), user.organization_id, db)
     item = await save_upload(file, user.organization_id, user.id, context_type, context_id, storage)
     db.add(item)
     await db.commit()

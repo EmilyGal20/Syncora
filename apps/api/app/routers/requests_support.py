@@ -1,7 +1,10 @@
+import io
+import re
 import secrets
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record_audit
 from ..database import get_db
 from ..dependencies import access_scope, current_user, require_permission
+from ..infrastructure.mongodb.models import SupportMessageDocument
+from ..infrastructure.mongodb.repositories import support_repository
 from ..models import (
     BandMemberProfile,
     Dashboard,
@@ -18,6 +23,7 @@ from ..models import (
     RegistrationRequest,
     RegistrationReviewEvent,
     Role,
+    StoredFile,
     SupportMessage,
     SupportTicket,
     User,
@@ -34,7 +40,9 @@ from ..schemas import (
     SupportTicketInput,
 )
 from ..security import hash_password, hash_token
+from ..storage import StorageAdapter, get_storage
 from .collaboration import create_notification, notification_json
+from .platform import file_json, save_upload
 
 router = APIRouter(tags=["access and support"])
 
@@ -55,11 +63,26 @@ def registration_json(value: RegistrationRequest, include_internal: bool = False
     return result
 
 
-def ticket_json(ticket: SupportTicket, messages: list[SupportMessage] | None = None, admin: bool = False) -> dict:
+def ticket_json(ticket: SupportTicket, messages: list[SupportMessage] | list[dict] | None = None, admin: bool = False, attachments: list[StoredFile] | None = None) -> dict:
     result = {"id": ticket.id, "organization_id": ticket.organization_id, "requester_user_id": ticket.requester_user_id, "requester_name": ticket.requester_name, "contact": ticket.contact, "category": ticket.category, "subject": ticket.subject, "description": ticket.description, "status": ticket.status, "priority": ticket.priority, "current_route": ticket.current_route, "created_at": ticket.created_at, "updated_at": ticket.updated_at}
     if messages is not None:
-        result["messages"] = [{"id": m.id, "author_name": m.author_name, "body": m.body, "internal": m.is_internal, "created_at": m.created_at} for m in messages if admin or not m.is_internal]
+        result["messages"] = [
+            {"id": m["message_id"], "author_name": m["sender_name"], "body": m["message"], "internal": m["message_type"] == "internal_note", "created_at": m["created_at"], "attachment_ids": m.get("attachment_ids", [])}
+            if isinstance(m, dict) else {"id": m.id, "author_name": m.author_name, "body": m.body, "internal": m.is_internal, "created_at": m.created_at, "attachment_ids": []}
+            for m in messages
+            if admin or (m["message_type"] != "internal_note" if isinstance(m, dict) else not m.is_internal)
+        ]
+    if attachments is not None:
+        result["attachments"] = [file_json(value) for value in attachments]
     return result
+
+
+async def add_support_message(db: AsyncSession, ticket: SupportTicket, *, author_name: str, body: str, author_user_id: str | None = None, internal: bool = False, sender_type: str = "user") -> SupportMessage:
+    message = SupportMessage(ticket_id=ticket.id, author_user_id=author_user_id, author_name=author_name, body=body, is_internal=internal)
+    db.add(message)
+    await db.flush()
+    await support_repository.upsert(SupportMessageDocument(message_id=message.id, ticket_id=ticket.id, workspace_id=ticket.organization_id or "platform", sender_user_id=author_user_id, sender_name=author_name, sender_type="admin" if internal else sender_type, message=body, message_type="internal_note" if internal else "message", created_at=message.created_at))
+    return message
 
 
 async def notify_platform_admins(db: AsyncSession, event_type: str, title: str, message: str, route: str, resource_type: str, resource_id: str) -> list[tuple[Notification, User]]:
@@ -183,7 +206,7 @@ async def create_guest_support(body: SupportTicketInput, request: Request, db: A
         raise HTTPException(status_code=422, detail="Name and contact are required")
     raw_token = secrets.token_urlsafe(32)
     ticket = SupportTicket(requester_name=body.requester_name.strip(), contact=body.contact, guest_token_hash=hash_token(raw_token), category=body.category, subject=body.subject, description=body.description, current_route=body.current_route)
-    db.add(ticket);await db.flush();db.add(SupportMessage(ticket_id=ticket.id, author_name=ticket.requester_name, body=ticket.description))
+    db.add(ticket);await db.flush();await add_support_message(db, ticket, author_name=ticket.requester_name, body=ticket.description, sender_type="guest")
     notifications = await notify_platform_admins(db, "support.created", "New support request", ticket.subject, "/admin", "support_ticket", ticket.id)
     await db.commit()
     for notification, admin in notifications:
@@ -194,7 +217,7 @@ async def create_guest_support(body: SupportTicketInput, request: Request, db: A
 @router.post("/support", status_code=201)
 async def create_user_support(body: SupportTicketInput, actor: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     ticket = SupportTicket(organization_id=actor.organization_id, requester_user_id=actor.id, requester_name=actor.full_name, contact=actor.email or actor.phone, category=body.category, subject=body.subject, description=body.description, current_route=body.current_route)
-    db.add(ticket);await db.flush();db.add(SupportMessage(ticket_id=ticket.id, author_user_id=actor.id, author_name=actor.full_name, body=ticket.description))
+    db.add(ticket);await db.flush();await add_support_message(db, ticket, author_user_id=actor.id, author_name=actor.full_name, body=ticket.description)
     notifications = await notify_platform_admins(db, "support.created", "New support request", ticket.subject, "/admin", "support_ticket", ticket.id)
     await db.commit()
     for notification, admin in notifications:
@@ -223,8 +246,45 @@ async def visible_ticket(ticket_id: str, actor: User, db: AsyncSession, manage: 
 async def support_detail(ticket_id: str, actor: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     ticket = await visible_ticket(ticket_id, actor, db)
     admin = access_scope(actor, "support.view") is not None
-    messages = (await db.scalars(select(SupportMessage).where(SupportMessage.ticket_id == ticket.id).order_by(SupportMessage.created_at))).all()
-    return ticket_json(ticket, messages, admin)
+    messages = await support_repository.list(ticket.organization_id or "platform", ticket.id, admin)
+    attachments = (await db.scalars(select(StoredFile).where(StoredFile.organization_id == actor.organization_id, StoredFile.context_type == "support_ticket", StoredFile.context_id == ticket.id).order_by(StoredFile.created_at))).all()
+    return ticket_json(ticket, messages, admin, list(attachments))
+
+
+@router.post("/support/{ticket_id}/attachments", status_code=201)
+async def upload_support_attachment(
+    ticket_id: str,
+    file: UploadFile = File(...),
+    actor: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageAdapter = Depends(get_storage),
+):
+    ticket = await visible_ticket(ticket_id, actor, db)
+    if not ticket.organization_id:
+        raise HTTPException(status_code=422, detail="Guest tickets use the secure guest conversation flow")
+    item = await save_upload(file, actor.organization_id, actor.id, "support_ticket", ticket.id, storage)
+    db.add(item)
+    await db.commit()
+    await db.refresh(item, attribute_names=["attachments"])
+    await record_audit(actor, "support.attachment_uploaded", "support_ticket", ticket.id, {"file_id": item.id, "name": item.display_name, "size": item.size})
+    return file_json(item)
+
+
+@router.get("/support/{ticket_id}/attachments/{file_id}")
+async def download_support_attachment(
+    ticket_id: str,
+    file_id: str,
+    actor: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageAdapter = Depends(get_storage),
+):
+    ticket = await visible_ticket(ticket_id, actor, db)
+    item = await db.scalar(select(StoredFile).where(StoredFile.id == file_id, StoredFile.organization_id == actor.organization_id, StoredFile.context_type == "support_ticket", StoredFile.context_id == ticket.id))
+    if not item:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    safe = re.sub(r"[^A-Za-z0-9._ -]", "_", item.display_name)
+    await record_audit(actor, "support.attachment_downloaded", "support_ticket", ticket.id, {"file_id": item.id})
+    return StreamingResponse(io.BytesIO(await storage.read(item.storage_key)), media_type=item.content_type, headers={"Content-Disposition": f'attachment; filename="{safe}"', "X-Content-Type-Options": "nosniff"})
 
 
 @router.post("/support/{ticket_id}/messages", status_code=201)
@@ -233,8 +293,8 @@ async def support_reply(ticket_id: str, body: SupportMessageInput, actor: User =
     admin = access_scope(actor, "support.reply") is not None
     if body.internal and access_scope(actor, "support.internal_notes") is None:
         raise HTTPException(status_code=403, detail="Internal note permission required")
-    message = SupportMessage(ticket_id=ticket.id, author_user_id=actor.id, author_name=actor.full_name, body=body.body, is_internal=body.internal)
-    db.add(message);ticket.updated_at = datetime.now(UTC)
+    message = await add_support_message(db, ticket, author_user_id=actor.id, author_name=actor.full_name, body=body.body, internal=body.internal, sender_type="admin" if admin else "user")
+    ticket.updated_at = datetime.now(UTC)
     recipient = ticket.requester_user_id if admin and not body.internal else None
     notification = await create_notification(db, organization_id=ticket.organization_id, recipient_id=recipient, event_type="support.reply", title="New support reply", message=ticket.subject, resource_type="support_ticket", resource_id=ticket.id, route="/support") if recipient and ticket.organization_id else None
     await db.commit()
@@ -259,7 +319,7 @@ async def guest_support_detail(ticket_id: str, token: str, db: AsyncSession = De
     ticket = await db.scalar(select(SupportTicket).where(SupportTicket.id == ticket_id, SupportTicket.guest_token_hash == hash_token(token)))
     if not ticket:
         raise HTTPException(status_code=404, detail="Support ticket not found")
-    messages = (await db.scalars(select(SupportMessage).where(SupportMessage.ticket_id == ticket.id, SupportMessage.is_internal.is_(False)).order_by(SupportMessage.created_at))).all()
+    messages = await support_repository.list(ticket.organization_id or "platform", ticket.id, False)
     return ticket_json(ticket, messages)
 
 
@@ -269,5 +329,5 @@ async def guest_support_reply(ticket_id: str, token: str, body: SupportMessageIn
     ticket = await db.scalar(select(SupportTicket).where(SupportTicket.id == ticket_id, SupportTicket.guest_token_hash == hash_token(token)))
     if not ticket:
         raise HTTPException(status_code=404, detail="Support ticket not found")
-    message = SupportMessage(ticket_id=ticket.id, author_name=ticket.requester_name, body=body.body);db.add(message);ticket.updated_at = datetime.now(UTC);await db.commit()
+    message = await add_support_message(db, ticket, author_name=ticket.requester_name, body=body.body, sender_type="guest");ticket.updated_at = datetime.now(UTC);await db.commit()
     return {"id": message.id}

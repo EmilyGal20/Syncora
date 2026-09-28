@@ -7,12 +7,13 @@ from sqlalchemy.orm import selectinload
 
 from ..audit import record_audit
 from ..database import get_db
-from ..dependencies import access_scope, current_user, permission_scopes, require_permission
+from ..dependencies import access_scope, current_user, permission_codes, permission_scopes, require_permission
 from ..models import (
     AccessGrant,
     Announcement,
     Department,
     Event,
+    Note,
     Organization,
     Permission,
     Role,
@@ -461,6 +462,8 @@ async def create_event(
     db.add(event)
     await db.commit()
     await record_audit(actor, "schedule.created", "event", event.id)
+    recipients = None if event.visibility == "organization" else {actor.id, owner, *(participant.id for participant in participants)}
+    await realtime_hub.publish(actor.organization_id, "event.created", {"id": event.id}, recipients)
     return event
 
 
@@ -490,6 +493,8 @@ async def update_event(
     event.participants = participants
     await db.commit()
     await record_audit(actor, "schedule.updated", "event", event.id)
+    recipients = None if event.visibility == "organization" else {actor.id, owner, *(participant.id for participant in participants)}
+    await realtime_hub.publish(actor.organization_id, "event.updated", {"id": event.id}, recipients)
     return event
 
 
@@ -505,6 +510,7 @@ async def delete_event(
     await db.delete(event)
     await db.commit()
     await record_audit(actor, "schedule.deleted", "event", event_id)
+    await realtime_hub.publish(actor.organization_id, "event.deleted", {"id": event_id}, {actor.id})
     return Response(status_code=204)
 
 
@@ -615,9 +621,13 @@ async def dashboard_summary(
     task_list = list(tasks.all())
     event_list = await events(None, user, db)
     announcement_list = await announcements(user, db)
+    pinned_notes = []
+    if "notes.view_own" in permission_codes(user):
+        pinned_notes = list((await db.scalars(select(Note).where(Note.organization_id == user.organization_id, Note.owner_user_id == user.id, Note.pinned.is_(True), Note.archived_at.is_(None)).order_by(Note.updated_at.desc()).limit(5))).all())
     return {
         "open_tasks": sum(t.status.value != "completed" for t in task_list),
         "completed_tasks": sum(t.status.value == "completed" for t in task_list),
         "upcoming_events": event_list[:5],
         "announcements": announcement_list[:5],
+        "pinned_notes": [{"id": note.id, "title": note.title, "updated_at": note.updated_at} for note in pinned_notes],
     }

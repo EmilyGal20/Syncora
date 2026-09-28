@@ -1,5 +1,7 @@
 # Database
 
+This file covers the relational schema. The hybrid ownership and MongoDB lifecycle are documented in [DATABASES.md](DATABASES.md).
+
 PostgreSQL is the production and Docker database. SQLAlchemy models define organizations, users, departments, teams, roles, permissions, sessions, navigation items, dashboards/widgets, tasks, events, announcements, and preferences. Composite unique constraints protect tenant-local names and user emails; organization columns are indexed.
 
 Run Python migrations from `apps/api`:

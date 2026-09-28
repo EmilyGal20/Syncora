@@ -14,7 +14,7 @@ from .security import decode_access_token
 bearer = HTTPBearer(auto_error=False)
 
 
-async def current_user(
+async def authenticated_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -65,6 +65,16 @@ async def current_user(
         ).all()
     )
     user._access_grants = grants
+    return user
+
+
+async def current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    user = await authenticated_user(credentials, db)
+    if user.must_change_password:
+        raise HTTPException(status_code=403, detail="Password change required")
     return user
 
 

@@ -9,13 +9,13 @@ Phase 2 adds scoped RBAC, individual allow/deny overrides, personal-data isolati
 - `apps/web`: React 19, TypeScript, Vite, MUI, React Router, TanStack Query, React Hook Form, and Zod.
 - `apps/api`: FastAPI application API, SQLAlchemy async persistence, Alembic migrations, Argon2 password hashing, JWT access tokens, and rotating refresh tokens.
 - `apps/services/Syncora.Audit`: ASP.NET Core 8 append-only audit service backed by PostgreSQL.
-- PostgreSQL 17 is the primary database. Every business query is scoped to the authenticated organization.
+- PostgreSQL 17 is the authoritative business/security database; MongoDB stores tenant-qualified realtime, notification, activity, and support-message documents. See `docs/DATABASES.md`.
 
 In development, the browser uses same-origin `/api` requests. Vite proxies them to FastAPI on port 8500, so authentication works through localhost, a LAN address, or a development hostname without embedding that hostname in the client. The API sends administration events to the internal audit service on port 8501.
 
 ## Prerequisites
 
-Node.js 20+, Python 3.13+, .NET SDK 8+, and PostgreSQL 16+ or Docker Desktop.
+Node.js 20+, Python 3.13+, .NET SDK 8+, PostgreSQL 16+, MongoDB 8+, or Docker Desktop.
 
 ## Docker Quick Start
 
@@ -38,7 +38,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r apps\api\requirements.txt
 dotnet restore apps\services\Syncora.Audit\Syncora.Audit.csproj
 Copy-Item .env.example .env
-docker compose up -d postgres
+docker compose up -d postgres mongodb
 cd apps\api
 ..\..\.venv\Scripts\python.exe -m alembic upgrade head
 cd ..\..
@@ -127,6 +127,6 @@ Create focused branches and commits, run the full verification suite, inspect `g
 ## Troubleshooting
 
 - Port conflict: stop the process using 8500, 8501, 8600, or 5432.
-- Database unavailable: confirm `docker compose ps` reports PostgreSQL healthy and verify `DATABASE_URL`.
+- Database unavailable: confirm `docker compose ps` reports PostgreSQL and MongoDB healthy, then verify `DATABASE_URL`, `MONGODB_URI`, and `MONGODB_DATABASE`.
 - Login seed missing: use an empty development database or run the seed after migrations.
 - Audit unavailable: core requests still complete and emit a warning; restore port 8501 before administrative changes.

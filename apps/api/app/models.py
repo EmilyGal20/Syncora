@@ -262,6 +262,35 @@ class Event(Base, TimestampMixin):
     team_id: Mapped[str | None] = mapped_column(ForeignKey("teams.id"))
     department_id: Mapped[str | None] = mapped_column(ForeignKey("departments.id"))
     participants: Mapped[list[User]] = relationship(secondary=event_participants, lazy="selectin")
+    color_key: Mapped[str] = mapped_column(String(20), default="blue")
+    event_type: Mapped[str] = mapped_column(String(30), default="general")
+    timezone: Mapped[str] = mapped_column(String(80), default="UTC")
+
+
+class Note(Base, TimestampMixin):
+    __tablename__ = "notes"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    owner_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200), default="Untitled note")
+    body: Mapped[str] = mapped_column(Text, default="")
+    visibility: Mapped[str] = mapped_column(String(20), default="private", index=True)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    version: Mapped[int] = mapped_column(default=1)
+
+
+class DomainOutbox(Base):
+    __tablename__ = "domain_outbox"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(100), index=True)
+    aggregate_type: Mapped[str] = mapped_column(String(80))
+    aggregate_id: Mapped[str] = mapped_column(String(36), index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    attempts: Mapped[int] = mapped_column(default=0)
 
 
 class Announcement(Base, TimestampMixin):

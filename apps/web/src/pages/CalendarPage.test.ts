@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { eventFormSchema, eventPayload, type EventForm } from './CalendarPage'
 
-const valid:EventForm={title:'Planning session',description:'Quarterly plan',date:new Date(2026,8,25),endDate:new Date(2026,8,25),start:new Date(2026,8,25,9),end:new Date(2026,8,25,10,30),allDay:false,location:'Room 2',visibility:'team',teamId:'team-1',participants:['user-1']}
+const valid:EventForm={title:'Planning session',description:'Quarterly plan',date:new Date(2026,8,25),endDate:new Date(2026,8,25),start:new Date(2026,8,25,9),end:new Date(2026,8,25,10,30),allDay:false,location:'Room 2',visibility:'team',teamId:'team-1',participants:['user-1'],colorKey:'violet',eventType:'rehearsal',timezone:'Asia/Jerusalem'}
 
 describe('calendar event form',()=>{
   it('builds a localized date and time payload for the API',()=>{
@@ -10,6 +10,8 @@ describe('calendar event form',()=>{
     expect(new Date(payload.starts_at).getHours()).toBe(9)
     expect(new Date(payload.ends_at).getMinutes()).toBe(30)
     expect(payload.participant_ids).toEqual(['user-1'])
+    expect(payload.color_key).toBe('violet')
+    expect(payload.event_type).toBe('rehearsal')
   })
 
   it('rejects an end time before the start time',()=>{

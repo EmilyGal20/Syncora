@@ -49,6 +49,12 @@ class UserSummary(ApiModel):
     workspace_primary_color: str = "#176B5B"
     workspace_secondary_color: str = "#3156C8"
     enabled_modules: list[str] = []
+    must_change_password: bool = False
+
+
+class ChangePassword(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=10, max_length=128)
 
 
 class WorkspaceCreate(BaseModel):
@@ -170,6 +176,11 @@ class DashboardInput(BaseModel):
 
 class DashboardAssignmentInput(BaseModel):
     dashboard_id: str
+
+
+class DashboardPrincipalAssignment(BaseModel):
+    principal_type: str = Field(pattern="^(organization|role|team|user)$")
+    principal_id: str | None = None
 
 
 class RegistrationRequestInput(BaseModel):
@@ -298,6 +309,24 @@ class EventInput(BaseModel):
     team_id: str | None = None
     department_id: str | None = None
     participant_ids: list[str] = []
+    color_key: str = Field(default="blue", pattern="^(blue|indigo|violet|purple|cyan|teal|green|amber|orange|red|pink|neutral)$")
+    event_type: str = Field(default="general", pattern="^(general|task|show|rehearsal|availability)$")
+    timezone: str = Field(default="UTC", min_length=1, max_length=80)
+
+
+class NoteCreate(BaseModel):
+    title: str = Field(default="Untitled note", min_length=1, max_length=200)
+    body: str = Field(default="", max_length=100_000)
+    visibility: str = Field(default="private", pattern="^(private|shared)$")
+
+
+class NoteUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    body: str | None = Field(default=None, max_length=100_000)
+    visibility: str | None = Field(default=None, pattern="^(private|shared)$")
+    pinned: bool | None = None
+    archived: bool | None = None
+    version: int = Field(ge=1)
 
 
 class TeamInput(BaseModel):
