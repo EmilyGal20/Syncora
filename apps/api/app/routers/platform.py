@@ -226,7 +226,6 @@ async def create_workspace(
         ("My Work", "CheckCircle", "/tasks", "tasks.view", 10),
         ("Schedule", "CalendarMonth", "/schedule", "schedule.view", 20),
         ("Files", "Folder", "/files", "files.view", 30),
-        ("Administration", "AdminPanelSettings", "/admin", "users.view", 90),
     ]
     band_nav = {
         "shows": ("Shows", "Event", "/band/shows", "shows.view"),
@@ -617,7 +616,17 @@ async def workspace_settings(
     db: AsyncSession = Depends(get_db),
 ):
     org = await db.get(Organization, user.organization_id)
-    allowed = {"name", "default_locale", "timezone", "currency", "primary_color", "secondary_color", "enabled_modules"}
+    allowed = {
+        "name",
+        "default_locale",
+        "timezone",
+        "currency",
+        "primary_color",
+        "secondary_color",
+        "enabled_modules",
+        "allow_user_locale",
+        "allow_user_theme",
+    }
     values = {key: value for key, value in body.model_dump(exclude_unset=True).items() if key in allowed}
     if values.get("enabled_modules") is not None and set(values["enabled_modules"]) - ALLOWED_MODULES:
         raise HTTPException(status_code=422, detail="Unknown module")

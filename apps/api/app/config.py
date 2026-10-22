@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     upload_max_bytes: int = 25 * 1024 * 1024
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_database: str = "syncora_dev"
+    public_app_url: str = "http://localhost:8600"
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

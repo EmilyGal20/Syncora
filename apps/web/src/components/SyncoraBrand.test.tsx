@@ -19,13 +19,20 @@ describe('Syncora branding',()=>{
     render(<SyncoraLoader label="Authenticating"/>)
     const loader=screen.getByRole('status',{name:'Authenticating'})
     expect(loader).toBeInTheDocument()
-    expect(loader.getAttribute('src')).toMatch(/^data:image\/svg\+xml/)
+    expect(loader.getAttribute('src')).toContain('syncora-loader')
   })
 
   it('renders optimized mark and wordmark variants without distorting them',()=>{
     render(<ThemeProvider theme={createSyncoraTheme('light','ltr')}><SyncoraLogo asset="mark"/><SyncoraLogo asset="wordmark"/></ThemeProvider>)
     expect(screen.getByRole('img',{name:'Syncora'})).toHaveAttribute('data-brand-asset','mark')
     expect(screen.getByRole('img',{name:/Plan, Manage, Connect/})).toHaveStyle({height:'auto'})
+  })
+
+  it('renders the S mark beside the wordmark when compact',()=>{
+    render(<ThemeProvider theme={createSyncoraTheme('light','ltr')}><SyncoraLogo compact/></ThemeProvider>)
+    const wordmark=screen.getByRole('img',{name:/Syncora/})
+    expect(wordmark).toHaveAttribute('data-brand-asset','lockup')
+    expect(wordmark.getAttribute('src')).toContain('syncora-wordmark')
   })
 
   it('supports a dark-surface logo independently of the page theme',()=>{

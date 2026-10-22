@@ -81,6 +81,8 @@ class WorkspaceUpdate(BaseModel):
     primary_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     secondary_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     enabled_modules: list[str] | None = None
+    allow_user_locale: bool | None = None
+    allow_user_theme: bool | None = None
 
 
 class FileRename(BaseModel):
@@ -147,6 +149,16 @@ class UserCreate(BaseModel):
     locale: str | None = Field(default=None, pattern="^(en|he)$")
 
 
+class SelfProfileUpdate(BaseModel):
+    email: EmailStr | None = None
+    full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    first_name: str | None = Field(default=None, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    phone: str | None = Field(default=None, max_length=40)
+    job_title: str | None = Field(default=None, max_length=120)
+    locale: str | None = Field(default=None, pattern="^(en|he)$")
+
+
 class UserUpdate(BaseModel):
     username: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{2,79}$")
     email: EmailStr | None = None
@@ -202,11 +214,13 @@ class RegistrationRequestInput(BaseModel):
 
 
 class RegistrationDecision(BaseModel):
-    organization_id: str
+    organization_id: str | None = None
+    create_workspace: bool = False
     role_ids: list[str] = []
     dashboard_id: str | None = None
     team_id: str | None = None
     department_id: str | None = None
+    permission_codes: list[str] = []
     applicant_response: str = Field(default="", max_length=1000)
     internal_note: str = Field(default="", max_length=2000)
 
@@ -310,7 +324,7 @@ class EventInput(BaseModel):
     department_id: str | None = None
     participant_ids: list[str] = []
     color_key: str = Field(default="blue", pattern="^(blue|indigo|violet|purple|cyan|teal|green|amber|orange|red|pink|neutral)$")
-    event_type: str = Field(default="general", pattern="^(general|task|show|rehearsal|availability)$")
+    event_type: str = Field(default="general", pattern="^(general|task|show|rehearsal|availability|meeting|appointment)$")
     timezone: str = Field(default="UTC", min_length=1, max_length=80)
 
 

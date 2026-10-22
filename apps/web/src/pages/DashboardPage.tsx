@@ -1,12 +1,15 @@
 import Download from '@mui/icons-material/Download'
 import { Box, Button, Card, CardContent, Chip, LinearProgress, Stack, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthProvider'
 import { EngineDashboardSection } from '../components/EngineOverview'
 import { ErrorState, LoadingState } from '../components/States'
 import { PageHeader } from '../components/PageHeader'
+import { greetingPeriod } from '../lib/greeting'
+import { usePreferences } from '../preferences/WorkspaceProvider'
 import type { Dashboard } from '../types'
 
 interface Summary {
@@ -19,7 +22,13 @@ interface Summary {
 
 export function DashboardPage() {
   const { t } = useTranslation()
-  const { can } = useAuth()
+  const { can, user } = useAuth()
+  const { preferences } = usePreferences()
+  const greeting = useMemo(() => {
+    const period = t(`dashboard.greetings.${greetingPeriod(new Date(), preferences.timezone)}`)
+    const name = (user?.first_name || user?.full_name || '').trim()
+    return name ? t('dashboard.greetingNamed', { greeting: period, name }) : period
+  }, [t, preferences.timezone, user?.first_name, user?.full_name])
   const q = useQuery({
     queryKey: ['dashboard'],
     queryFn: async () => {
@@ -61,7 +70,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.subtitle')} action={actions} />
+      <PageHeader title={greeting} subtitle={t('dashboard.subtitle')} action={actions} />
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(12, 1fr)' }, gap: 2 }}>
         {q.data?.dashboard.widgets.map(w => (
           <Card key={w.id} sx={{ gridColumn: { xs: 'span 1', lg: `span ${Math.min(12, w.width)}` }, minHeight: w.type === 'kpi' ? 150 : 220 }}>

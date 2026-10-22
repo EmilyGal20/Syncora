@@ -91,6 +91,16 @@ PERMISSIONS = [
     "notes.delete_own",
     "notes.view_shared",
     "notes.manage_shared",
+    "booking.manage",
+    "profile.view",
+    "profile.edit",
+    "engine.dashboard",
+    "engine.tasks",
+    "engine.board",
+    "engine.projects",
+    "engine.calendar",
+    "engine.analytics",
+    "engine.planner",
 ]
 
 
@@ -153,6 +163,15 @@ async def ensure_access_grants(db: AsyncSession, org: Organization, admin_role: 
         "notes.create",
         "notes.edit_own",
         "notes.delete_own",
+        "engine.dashboard",
+        "engine.tasks",
+        "engine.board",
+        "engine.projects",
+        "engine.calendar",
+        "engine.analytics",
+        "engine.planner",
+        "profile.view",
+        "profile.edit",
     }
     db.add_all(
         [
@@ -294,7 +313,6 @@ async def seed(db: AsyncSession) -> None:
         ("Notes", "Notes", "/notes", "notes.view_own", 25),
         ("Teams", "Groups", "/teams", "teams.view", 30),
         ("Announcements", "Campaign", "/announcements", "announcements.view", 40),
-        ("Administration", "AdminPanelSettings", "/admin", "users.view", 90),
     ]
     db.add_all(
         [

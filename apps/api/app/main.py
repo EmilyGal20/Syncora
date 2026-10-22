@@ -9,7 +9,7 @@ from .config import get_settings
 from .database import Base, SessionLocal, engine
 from .infrastructure.mongodb import mongo
 from .infrastructure.mongodb.migration import migrate_compatibility_documents
-from .routers import auth, band, collaboration, core, notes, phase2, platform, requests_support
+from .routers import auth, band, bookings, collaboration, core, notes, phase2, platform, requests_support
 from .seed import seed
 
 settings = get_settings()
@@ -80,3 +80,4 @@ app.include_router(band.router, prefix="/api/v1")
 app.include_router(collaboration.router, prefix="/api/v1")
 app.include_router(requests_support.router, prefix="/api/v1")
 app.include_router(notes.router, prefix="/api/v1")
+app.include_router(bookings.router, prefix="/api/v1")

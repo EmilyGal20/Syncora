@@ -18,7 +18,7 @@ from ..models import (
     UserPreference,
 )
 from ..realtime import realtime_hub
-from ..schemas import NavigationInput, PasswordReset, RoleCreate, TaskCreate, UserCreate, UserUpdate
+from ..schemas import NavigationInput, PasswordReset, RoleCreate, SelfProfileUpdate, TaskCreate, UserCreate, UserUpdate
 from ..security import hash_password
 from .collaboration import create_notification, notification_json
 
@@ -129,6 +129,26 @@ async def create_user(
     await db.commit()
     await record_audit(actor, "user.created", "user", created.id, {"username": created.username})
     return user_json(created)
+
+
+@router.patch("/me")
+async def update_me(
+    body: SelfProfileUpdate,
+    actor: User = Depends(require_permission("profile.edit")),
+    db: AsyncSession = Depends(get_db),
+):
+    target = await db.get(User, actor.id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if body.email is not None:
+        body.email = body.email.lower()
+        if await db.scalar(select(User.id).where(User.organization_id == actor.organization_id, User.id != target.id, User.email == body.email)):
+            raise HTTPException(status_code=409, detail="Email already exists in this workspace")
+    for key, value in body.model_dump(exclude_unset=True).items():
+        setattr(target, key, value)
+    await db.commit()
+    await record_audit(actor, "profile.updated", "user", target.id, {"fields": list(body.model_dump(exclude_unset=True))})
+    return user_json(target)
 
 
 @router.patch("/users/{user_id}")

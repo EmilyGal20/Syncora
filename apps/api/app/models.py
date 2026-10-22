@@ -520,3 +520,38 @@ class Expense(Base, TimestampMixin):
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     incurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+
+
+class BookingLink(Base, TimestampMixin):
+    __tablename__ = "booking_links"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True)
+    slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    duration_minutes: Mapped[int] = mapped_column(default=60)
+
+
+class BookingRequest(Base, TimestampMixin):
+    __tablename__ = "booking_requests"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    link_id: Mapped[str] = mapped_column(ForeignKey("booking_links.id", ondelete="CASCADE"), index=True)
+    host_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    event_id: Mapped[str | None] = mapped_column(ForeignKey("events.id"), index=True)
+    guest_token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    guest_name: Mapped[str] = mapped_column(String(160))
+    guest_organization: Mapped[str] = mapped_column(String(160), default="")
+    guest_email: Mapped[str | None] = mapped_column(String(254))
+    guest_phone: Mapped[str | None] = mapped_column(String(40))
+    reason: Mapped[str] = mapped_column(String(240), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    timezone: Mapped[str] = mapped_column(String(80), default="UTC")
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    rejection_reason: Mapped[str] = mapped_column(Text, default="")
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    messages: Mapped[list] = mapped_column(JSON, default=list)

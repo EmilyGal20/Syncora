@@ -120,8 +120,9 @@ export function relativeTime(iso: string, now = new Date()): string {
 
 export function greeting(now = new Date()): string {
   const h = now.getHours();
-  if (h < 5) return 'Working late';
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (h >= 5 && h < 12) return 'Good morning';
+  if (h >= 12 && h < 14) return 'Good afternoon';
+  if (h >= 14 && h < 17) return 'Good afternoon';
+  if (h >= 17 && h < 22) return 'Good evening';
+  return 'Good night';
 }

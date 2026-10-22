@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record_audit
@@ -15,11 +15,14 @@ from ..dependencies import access_scope, current_user, require_permission
 from ..infrastructure.mongodb.models import SupportMessageDocument
 from ..infrastructure.mongodb.repositories import support_repository
 from ..models import (
+    AccessGrant,
     BandMemberProfile,
     Dashboard,
     DashboardAssignment,
+    NavigationItem,
     Notification,
     Organization,
+    Permission,
     RegistrationRequest,
     RegistrationReviewEvent,
     Role,
@@ -28,6 +31,8 @@ from ..models import (
     SupportTicket,
     User,
     UserPreference,
+    WorkspaceMembership,
+    user_roles,
 )
 from ..rate_limit import public_limiter
 from ..realtime import realtime_hub
@@ -45,6 +50,142 @@ from .collaboration import create_notification, notification_json
 from .platform import file_json, save_upload
 
 router = APIRouter(tags=["access and support"])
+
+
+def workspace_slug(name: str) -> str:
+    value = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:80]
+    return value or "workspace"
+
+
+async def users_who_can_grant(db: AsyncSession, organization_id: str | None) -> list[User]:
+    permission = await db.scalar(select(Permission).where(Permission.code == "access_requests.manage"))
+    platform = list((await db.scalars(select(User).where(User.is_platform_admin.is_(True), User.is_active.is_(True)))).all())
+    if not permission:
+        return platform
+    query = select(AccessGrant).where(AccessGrant.permission_id == permission.id, AccessGrant.effect == "allow")
+    if organization_id:
+        query = query.where(AccessGrant.organization_id == organization_id)
+    grants = list((await db.scalars(query)).all())
+    role_ids = [grant.principal_id for grant in grants if grant.principal_type == "role"]
+    user_ids = {grant.principal_id for grant in grants if grant.principal_type == "user"}
+    if role_ids:
+        user_ids.update((await db.scalars(select(user_roles.c.user_id).where(user_roles.c.role_id.in_(role_ids)))).all())
+    if user_ids:
+        scoped = list((await db.scalars(select(User).where(User.id.in_(user_ids), User.is_active.is_(True)))).all())
+        if organization_id:
+            scoped = [user for user in scoped if user.organization_id == organization_id or user.is_platform_admin]
+        by_id = {user.id: user for user in platform}
+        for user in scoped:
+            by_id[user.id] = user
+        return list(by_id.values())
+    return platform
+
+
+async def notify_grantors(db: AsyncSession, organization_id: str | None, event_type: str, title: str, message: str, resource_id: str) -> list[tuple[Notification, User]]:
+    values = []
+    for admin in await users_who_can_grant(db, organization_id):
+        notification = await create_notification(
+            db,
+            organization_id=admin.organization_id,
+            recipient_id=admin.id,
+            event_type=event_type,
+            title=title,
+            message=message,
+            resource_type="registration_request",
+            resource_id=resource_id,
+            route="/settings?panel=requests",
+        )
+        values.append((notification, admin))
+    return values
+
+
+async def apply_permission_codes(db: AsyncSession, organization_id: str, user_id: str, role_ids: list[str], codes: list[str]) -> None:
+    if not codes:
+        return
+    permissions = {item.code: item for item in (await db.scalars(select(Permission).where(Permission.code.in_(codes)))).all()}
+    role_grants = list(
+        (
+            await db.scalars(
+                select(AccessGrant)
+                .where(AccessGrant.principal_type == "role", AccessGrant.principal_id.in_(role_ids), AccessGrant.effect == "allow")
+            )
+        ).all()
+    ) if role_ids else []
+    inherited = {grant.permission_id for grant in role_grants}
+    extras = [permissions[code] for code in codes if code in permissions and permissions[code].id not in inherited]
+    db.add_all(
+        [
+            AccessGrant(
+                organization_id=organization_id,
+                principal_type="user",
+                principal_id=user_id,
+                permission_id=item.id,
+                scope="ORGANIZATION" if item.code.endswith(".manage") or "delete" in item.code else "OWN",
+                effect="allow",
+            )
+            for item in extras
+        ]
+    )
+    if role_ids:
+        wanted = {permissions[code].id for code in codes if code in permissions}
+        missing = inherited - wanted
+        if missing:
+            denied = list((await db.scalars(select(Permission).where(Permission.id.in_(missing)))).all())
+            db.add_all(
+                [
+                    AccessGrant(
+                        organization_id=organization_id,
+                        principal_type="user",
+                        principal_id=user_id,
+                        permission_id=item.id,
+                        scope="OWN",
+                        effect="deny",
+                    )
+                    for item in denied
+                ]
+            )
+
+
+async def create_personal_workspace(db: AsyncSession, request: RegistrationRequest, actor: User) -> Organization:
+    slug = workspace_slug(request.requested_workspace_name)
+    existing = await db.scalar(select(Organization.id).where(or_(Organization.slug == slug, Organization.name == request.requested_workspace_name)))
+    if existing:
+        raise HTTPException(status_code=409, detail="Workspace name already exists")
+    org = Organization(
+        name=request.requested_workspace_name,
+        slug=slug,
+        workspace_type="band" if request.workspace_type == "band" else "general",
+        default_locale=request.preferred_locale,
+        timezone=request.timezone,
+    )
+    db.add(org)
+    await db.flush()
+    permissions = list((await db.scalars(select(Permission))).all())
+    admin_role = Role(organization_id=org.id, name="Workspace Administrator", description="Full workspace administration")
+    member_role = Role(organization_id=org.id, name="Member", description="Standard member")
+    db.add_all([admin_role, member_role])
+    await db.flush()
+    db.add_all(
+        [
+            AccessGrant(organization_id=org.id, principal_type="role", principal_id=admin_role.id, permission_id=item.id, scope="ORGANIZATION", effect="allow")
+            for item in permissions
+        ]
+    )
+    db.add_all(
+        [
+            NavigationItem(organization_id=org.id, title=title, icon=icon, route=route, required_permission=permission, order=order)
+            for title, icon, route, permission, order in [
+                ("Dashboard", "Dashboard", "/dashboard", "dashboard.view", 0),
+                ("My Work", "CheckCircle", "/tasks", "tasks.view", 10),
+                ("Schedule", "CalendarMonth", "/schedule", "schedule.view", 20),
+                ("Notes", "Notes", "/notes", "notes.view_own", 25),
+                ("Files", "Folder", "/files", "files.view", 30),
+            ]
+        ]
+    )
+    db.add(Dashboard(organization_id=org.id, name=f"{org.name} overview", is_default=True))
+    db.add(WorkspaceMembership(user_id=actor.id, organization_id=org.id, access_level="administrator"))
+    return org
 
 
 def registration_json(value: RegistrationRequest, include_internal: bool = False) -> dict:
@@ -105,8 +246,13 @@ async def submit_registration(body: RegistrationRequestInput, request: Request, 
     value = RegistrationRequest(desired_username=username, password_hash=hash_password(body.password), first_name=body.first_name.strip(), last_name=body.last_name.strip(), display_name=body.display_name.strip(), email=email, phone=body.phone, preferred_locale=body.preferred_locale, timezone=body.timezone, workspace_mode=body.workspace_mode, workspace_type=body.workspace_type, requested_workspace_name=body.workspace_name.strip(), requested_role=body.requested_role.strip(), description=body.description, details=body.details, status="PENDING")
     db.add(value)
     await db.flush()
+    matched = None
+    if value.workspace_mode == "existing":
+        matched = await db.scalar(select(Organization).where(func.lower(Organization.name) == value.requested_workspace_name.lower()))
+        if matched:
+            value.resolved_organization_id = matched.id
     db.add(RegistrationReviewEvent(request_id=value.id, action="submitted", metadata_json={"workspace_mode": value.workspace_mode}))
-    notifications = await notify_platform_admins(db, "registration.submitted", "New access request", f"{value.display_name} requested access to {value.requested_workspace_name}.", "/admin", "registration_request", value.id)
+    notifications = await notify_grantors(db, matched.id if matched else None, "registration.submitted", "New access request", f"{value.display_name} requested access to {value.requested_workspace_name}.", value.id)
     await db.commit()
     for notification, admin in notifications:
         await realtime_hub.publish(admin.organization_id, "registration.created", {"request_id": value.id}, {admin.id})
@@ -118,7 +264,14 @@ async def submit_registration(body: RegistrationRequestInput, request: Request, 
 async def list_registrations(status: str | None = None, search: str = "", actor: User = Depends(require_permission("access_requests.manage")), db: AsyncSession = Depends(get_db)):
     query = select(RegistrationRequest)
     if not actor.is_platform_admin:
-        query = query.where(RegistrationRequest.resolved_organization_id == actor.organization_id)
+        organization = await db.get(Organization, actor.organization_id)
+        name = (organization.name if organization else "").lower()
+        query = query.where(
+            or_(
+                RegistrationRequest.resolved_organization_id == actor.organization_id,
+                func.lower(RegistrationRequest.requested_workspace_name) == name,
+            )
+        )
     if status:
         query = query.where(RegistrationRequest.status == status)
     if search:
@@ -130,7 +283,11 @@ async def list_registrations(status: str | None = None, search: str = "", actor:
 @router.post("/registration-requests/{request_id}/review")
 async def review_registration(request_id: str, actor: User = Depends(require_permission("access_requests.manage")), db: AsyncSession = Depends(get_db)):
     value = await db.get(RegistrationRequest, request_id)
-    if not value or (not actor.is_platform_admin and value.resolved_organization_id != actor.organization_id):
+    if not value:
+        raise HTTPException(status_code=404, detail="Request not found")
+    organization = await db.get(Organization, actor.organization_id)
+    same_workspace = bool(organization and value.requested_workspace_name.lower() == organization.name.lower())
+    if not actor.is_platform_admin and value.resolved_organization_id not in {None, actor.organization_id} and not same_workspace:
         raise HTTPException(status_code=404, detail="Request not found")
     if value.status == "PENDING":
         value.status = "UNDER_REVIEW"
@@ -154,11 +311,21 @@ async def registration_options(organization_id: str, actor: User = Depends(requi
 @router.post("/registration-requests/{request_id}/approve")
 async def approve_registration(request_id: str, body: RegistrationDecision, actor: User = Depends(require_permission("access_requests.manage")), db: AsyncSession = Depends(get_db)):
     value = await db.get(RegistrationRequest, request_id)
-    organization = await db.get(Organization, body.organization_id)
-    if not value or value.status not in {"PENDING", "UNDER_REVIEW"} or not organization:
+    if not value or value.status not in {"PENDING", "UNDER_REVIEW"}:
         raise HTTPException(status_code=404, detail="Request or workspace not found")
-    if not actor.is_platform_admin and organization.id != actor.organization_id:
-        raise HTTPException(status_code=403, detail="Cannot approve into another workspace")
+    if body.create_workspace:
+        if not actor.is_platform_admin:
+            raise HTTPException(status_code=403, detail="Only a platform administrator can create a personal workspace")
+        organization = await create_personal_workspace(db, value, actor)
+        admin_role = await db.scalar(select(Role).where(Role.organization_id == organization.id, Role.name == "Workspace Administrator"))
+        body.role_ids = [admin_role.id] if admin_role else []
+        body.organization_id = organization.id
+    else:
+        organization = await db.get(Organization, body.organization_id) if body.organization_id else None
+        if not organization:
+            raise HTTPException(status_code=404, detail="Request or workspace not found")
+        if not actor.is_platform_admin and organization.id != actor.organization_id:
+            raise HTTPException(status_code=403, detail="Cannot approve into another workspace")
     if await db.scalar(select(User.id).where(User.organization_id == organization.id, or_(User.username == value.desired_username, User.email == value.email) if value.email else User.username == value.desired_username)):
         raise HTTPException(status_code=409, detail="Account details are no longer available")
     roles = list((await db.scalars(select(Role).where(Role.organization_id == organization.id, Role.id.in_(body.role_ids)))).all()) if body.role_ids else []
@@ -171,12 +338,13 @@ async def approve_registration(request_id: str, body: RegistrationDecision, acto
     db.add(user)
     await db.flush()
     db.add(UserPreference(user_id=user.id, locale=value.preferred_locale, timezone=value.timezone))
+    await apply_permission_codes(db, organization.id, user.id, [role.id for role in roles], body.permission_codes)
     if dashboard:
         db.add(DashboardAssignment(organization_id=organization.id, dashboard_id=dashboard.id, principal_type="user", principal_id=user.id, assigned_by=actor.id))
     if organization.workspace_type == "band":
         db.add(BandMemberProfile(organization_id=organization.id, user_id=user.id, stage_name=str(value.details.get("stage_name", ""))[:160], instruments=list(value.details.get("instruments", []))[:20], band_role=str(value.details.get("band_role", value.requested_role))[:120], public_details=str(value.details.get("public_details", ""))))
     value.status = "APPROVED";value.resolved_organization_id = organization.id;value.reviewed_by = actor.id;value.reviewed_at = datetime.now(UTC);value.applicant_response = body.applicant_response;value.internal_note = body.internal_note
-    db.add(RegistrationReviewEvent(request_id=value.id, actor_id=actor.id, action="approved", metadata_json={"organization_id": organization.id, "role_ids": body.role_ids, "dashboard_id": body.dashboard_id}))
+    db.add(RegistrationReviewEvent(request_id=value.id, actor_id=actor.id, action="approved", metadata_json={"organization_id": organization.id, "role_ids": body.role_ids, "dashboard_id": body.dashboard_id, "create_workspace": body.create_workspace}))
     await db.commit()
     await record_audit(actor, "registration.approved", "registration_request", value.id, {"user_id": user.id, "organization_id": organization.id})
     await realtime_hub.publish(actor.organization_id, "registration.updated", {"request_id": value.id, "status": value.status}, {actor.id})

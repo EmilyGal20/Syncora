@@ -491,10 +491,14 @@ async def update_event(
         setattr(event, key, value)
     event.owner_user_id = owner
     event.participants = participants
+    from .bookings import notify_booking_event_change
+
+    await notify_booking_event_change(db, event)
     await db.commit()
     await record_audit(actor, "schedule.updated", "event", event.id)
     recipients = None if event.visibility == "organization" else {actor.id, owner, *(participant.id for participant in participants)}
     await realtime_hub.publish(actor.organization_id, "event.updated", {"id": event.id}, recipients)
+    await realtime_hub.publish(actor.organization_id, "booking.updated", {"id": event.id}, recipients)
     return event
 
 
