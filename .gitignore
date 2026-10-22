@@ -23,3 +23,4 @@ obj/
 *.sqlite3
 *.db-shm
 *.db-wal
+.dev-server.*.log
