@@ -23,6 +23,10 @@ export function canNativeInstall() {
   return deferred !== null
 }
 
+export function shouldOfferWorkspaceInstall(options: { allowed: boolean; installed: boolean; enabled: boolean }) {
+  return options.allowed && options.enabled && !options.installed
+}
+
 export function subscribeInstallAvailable(listener: () => void) {
   listeners.add(listener)
   return () => listeners.delete(listener)

@@ -1,12 +1,14 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
+from .install_prompt import normalize_install_prompt
 from .models import (
     AccessGrant,
     Announcement,
+    AppNotice,
     Dashboard,
     DashboardWidget,
     Department,
@@ -101,6 +103,9 @@ PERMISSIONS = [
     "engine.calendar",
     "engine.analytics",
     "engine.planner",
+    "app.install.navbar",
+    "app.install.notice",
+    "app.install.manage",
 ]
 
 
@@ -114,6 +119,15 @@ async def ensure_access_grants(db: AsyncSession, org: Organization, admin_role: 
         ]
     )
     await db.flush()
+    obsolete_ids = list((await db.scalars(select(Permission.id).where(Permission.code.in_(["app.install", "app.install_notice"])))).all())
+    if obsolete_ids:
+        await db.execute(delete(AccessGrant).where(AccessGrant.permission_id.in_(obsolete_ids)))
+        await db.execute(delete(Permission).where(Permission.id.in_(obsolete_ids)))
+        await db.flush()
+    live_ids = list((await db.scalars(select(Permission.id))).all())
+    if live_ids:
+        await db.execute(delete(AccessGrant).where(AccessGrant.permission_id.not_in(live_ids)))
+        await db.flush()
     permissions = {p.code: p for p in (await db.scalars(select(Permission))).all()}
     existing_admin = set(
         (
@@ -172,6 +186,8 @@ async def ensure_access_grants(db: AsyncSession, org: Organization, admin_role: 
         "engine.planner",
         "profile.view",
         "profile.edit",
+        "app.install.navbar",
+        "app.install.notice",
     }
     db.add_all(
         [
@@ -186,6 +202,22 @@ async def ensure_access_grants(db: AsyncSession, org: Organization, admin_role: 
             for code in member_codes
             if permissions[code].id not in existing_member
         ]
+    )
+
+
+async def seed_default_app_notices(db: AsyncSession, org: Organization) -> None:
+    existing = await db.scalar(select(AppNotice.id).where(AppNotice.organization_id == org.id))
+    if existing:
+        return
+    prompt = normalize_install_prompt(getattr(org, "install_prompt", None))
+    db.add(
+        AppNotice(
+            organization_id=org.id,
+            message=prompt["message"],
+            enabled=prompt["notice"],
+            audience="organization",
+            target_ids=[],
+        )
     )
 
 
@@ -235,6 +267,7 @@ async def seed(db: AsyncSession) -> None:
                         order=25,
                     )
                 )
+            await seed_default_app_notices(db, existing_org)
             await db.commit()
         return
     settings = get_settings()
@@ -369,4 +402,5 @@ async def seed(db: AsyncSession) -> None:
             ),
         ]
     )
+    await seed_default_app_notices(db, org)
     await db.commit()

@@ -19,9 +19,12 @@ from sqlalchemy.orm import selectinload
 from ..audit import record_audit
 from ..config import get_settings
 from ..database import get_db
-from ..dependencies import access_scope, current_user, require_permission
+from ..app_notices import notice_json, notice_visible
+from ..dependencies import access_scope, current_user, permission_codes, require_any_permission, require_permission
+from ..install_prompt import normalize_install_prompt
 from ..models import (
     AccessGrant,
+    AppNotice,
     BandShow,
     Dashboard,
     Equipment,
@@ -39,7 +42,7 @@ from ..models import (
     UserPreference,
     WorkspaceMembership,
 )
-from ..schemas import FileAttachmentInput, FileRename, WorkspaceCreate, WorkspaceUpdate
+from ..schemas import AppNoticeInput, AppNoticeUpdate, FileAttachmentInput, FileRename, InstallPromptUpdate, WorkspaceCreate, WorkspaceUpdate
 from ..security import hash_password
 from ..storage import StorageAdapter, get_storage
 from .auth import issue_tokens
@@ -635,6 +638,119 @@ async def workspace_settings(
     await db.commit()
     await record_audit(user, "workspace.settings.changed", "organization", org.id, {"fields": sorted(values)})
     return workspace_json(org)
+
+
+@router.patch("/workspace/install-prompt")
+async def workspace_install_prompt(
+    body: InstallPromptUpdate,
+    user: User = Depends(require_any_permission("app.install.manage", "settings.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    org = await db.get(Organization, user.organization_id)
+    org.install_prompt = normalize_install_prompt(body.model_dump())
+    await db.commit()
+    await record_audit(user, "workspace.install_prompt.changed", "organization", org.id)
+    return org.install_prompt
+
+
+def _notice_targets(body_audience: str, target_ids: list[str], user: User) -> list[str]:
+    if body_audience == "organizations" and not user.is_platform_admin:
+        raise HTTPException(status_code=403, detail="Platform administrator access required")
+    cleaned = [item for item in target_ids if isinstance(item, str) and item][:200]
+    if body_audience == "organization":
+        return []
+    return cleaned
+
+
+@router.get("/app-notices")
+async def visible_app_notices(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    allowed = "app.install.notice" in permission_codes(user) or user.is_platform_admin
+    notices = (await db.scalars(select(AppNotice).where(AppNotice.enabled.is_(True)).order_by(AppNotice.created_at.asc()))).all()
+    return [notice_json(notice) for notice in notices if notice_visible(notice, user, allowed)]
+
+
+@router.get("/workspace/app-notices")
+async def manage_app_notices(
+    user: User = Depends(require_any_permission("app.install.manage", "settings.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    notices = (
+        await db.scalars(
+            select(AppNotice).where(AppNotice.organization_id == user.organization_id).order_by(AppNotice.created_at.asc())
+        )
+    ).all()
+    people = (
+        await db.scalars(
+            select(User).where(User.organization_id == user.organization_id, User.is_active.is_(True)).order_by(User.full_name)
+        )
+    ).all()
+    organizations = []
+    if user.is_platform_admin:
+        organizations = list((await db.scalars(select(Organization).where(Organization.is_active.is_(True)).order_by(Organization.name))).all())
+    return {
+        "items": [notice_json(notice) for notice in notices],
+        "users": [{"id": person.id, "full_name": person.full_name} for person in people],
+        "organizations": [{"id": org.id, "name": org.name} for org in organizations],
+    }
+
+
+@router.post("/workspace/app-notices", status_code=201)
+async def create_app_notice(
+    body: AppNoticeInput,
+    user: User = Depends(require_any_permission("app.install.manage", "settings.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    notice = AppNotice(
+        organization_id=user.organization_id,
+        message=body.message.strip(),
+        enabled=body.enabled,
+        audience=body.audience,
+        target_ids=_notice_targets(body.audience, body.target_ids, user),
+    )
+    db.add(notice)
+    await db.commit()
+    await db.refresh(notice)
+    await record_audit(user, "app_notice.created", "app_notice", notice.id)
+    return notice_json(notice)
+
+
+@router.patch("/workspace/app-notices/{notice_id}")
+async def update_app_notice(
+    notice_id: str,
+    body: AppNoticeUpdate,
+    user: User = Depends(require_any_permission("app.install.manage", "settings.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    notice = await db.get(AppNotice, notice_id)
+    if not notice or notice.organization_id != user.organization_id:
+        raise HTTPException(status_code=404, detail="Notice not found")
+    values = body.model_dump(exclude_unset=True)
+    if "message" in values:
+        notice.message = str(values["message"] or "").strip()
+    if "enabled" in values:
+        notice.enabled = bool(values["enabled"])
+    audience = values.get("audience", notice.audience)
+    targets = values["target_ids"] if "target_ids" in values else list(notice.target_ids or [])
+    notice.audience = audience
+    notice.target_ids = _notice_targets(audience, targets, user)
+    await db.commit()
+    await record_audit(user, "app_notice.updated", "app_notice", notice.id)
+    return notice_json(notice)
+
+
+@router.delete("/workspace/app-notices/{notice_id}", status_code=204)
+async def delete_app_notice(
+    notice_id: str,
+    user: User = Depends(require_any_permission("app.install.manage", "settings.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    notice = await db.get(AppNotice, notice_id)
+    if not notice or notice.organization_id != user.organization_id:
+        raise HTTPException(status_code=404, detail="Notice not found")
+    await db.delete(notice)
+    await db.commit()
+    await record_audit(user, "app_notice.deleted", "app_notice", notice_id)
+    return Response(status_code=204)
 
 
 @router.get("/workspace/logo")

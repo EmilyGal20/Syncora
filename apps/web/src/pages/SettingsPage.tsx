@@ -10,15 +10,17 @@ import { useAuth } from '../auth/AuthProvider'
 import { GrantAuthorityPanel, PagePermissions } from '../components/PagePermissions'
 import { PageHeader } from '../components/PageHeader'
 import { usePreferences } from '../preferences/WorkspaceProvider'
+import { AppNoticesPage } from './AppNoticesPage'
 import { AccessRequestsPanel, AdminSupportPanel, DashboardBuilder, NavigationPanel, Overview, RolesPanel, UsersPanel } from './AdminPage'
 
 export function SettingsPage() {
   const { t } = useTranslation()
   const { can } = useAuth()
   const [params, setParams] = useSearchParams()
-  const admin = can('users.view') || can('roles.manage') || can('settings.manage')
+  const admin = can('users.view') || can('roles.manage') || can('settings.manage') || can('app.install.manage')
   const panels = useMemo(() => [
     { id: 'permissions', label: t('settings.admin.permissionsTitle'), show: can('roles.manage') || can('users.edit') },
+    { id: 'notices', label: t('install.noticesTitle'), show: can('app.install.manage') || can('settings.manage') },
     { id: 'grantors', label: t('settings.admin.grantorsTitle'), show: can('roles.manage') || can('users.edit') },
     { id: 'users', label: t('admin.users'), show: can('users.view') },
     { id: 'roles', label: t('admin.roles'), show: can('roles.manage') },
@@ -56,6 +58,7 @@ export function SettingsPage() {
           </>
         )}
         <Box sx={{ minWidth: 0 }}>
+          {panel === 'notices' && <AppNoticesPage />}
           {panel === 'permissions' && <PagePermissions />}
           {panel === 'grantors' && <GrantAuthorityPanel />}
           {panel === 'users' && <UsersPanel />}

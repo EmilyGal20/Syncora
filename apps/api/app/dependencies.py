@@ -56,7 +56,9 @@ async def authenticated_user(
     grants = list(
         (
             await db.scalars(
-                select(AccessGrant).where(
+                select(AccessGrant)
+                .options(selectinload(AccessGrant.permission))
+                .where(
                     AccessGrant.organization_id == user.organization_id,
                     ((AccessGrant.principal_type == "user") & (AccessGrant.principal_id == user.id))
                     | ((AccessGrant.principal_type == "role") & (AccessGrant.principal_id.in_(role_ids))),
@@ -83,7 +85,12 @@ def permission_codes(user: User) -> set[str]:
 
 
 def permission_scopes(user: User) -> dict[str, str]:
-    codes = {g.permission.code for g in getattr(user, "_access_grants", [])}
+    codes = set()
+    for grant in getattr(user, "_access_grants", []):
+        permission = getattr(grant, "permission", None)
+        code = getattr(permission, "code", None) if permission is not None else None
+        if code:
+            codes.add(code)
     return {code: scope for code in codes if (scope := access_scope(user, code)) is not None}
 
 
@@ -111,6 +118,15 @@ def require_permission(code: str) -> Callable:
         if access_scope(user, code) is None:
             raise HTTPException(status_code=403, detail=f"Permission required: {code}")
         return user
+
+    return dependency
+
+
+def require_any_permission(*codes: str) -> Callable:
+    async def dependency(user: User = Depends(current_user)) -> User:
+        if any(access_scope(user, code) is not None for code in codes):
+            return user
+        raise HTTPException(status_code=403, detail=f"Permission required: {' or '.join(codes)}")
 
     return dependency
 

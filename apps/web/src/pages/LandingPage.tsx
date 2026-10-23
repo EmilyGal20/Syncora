@@ -109,7 +109,7 @@ export function LandingPage() {
         <p className="sy-lead">Syncora is the operating layer for daily work: tasks, calendars, teams, files, notes, booking, and permissions — as a desktop app, on a phone over Wi-Fi, or in local development.</p>
         <div className="sy-pills">{pills.map((item) => <span key={item}>{item}</span>)}</div>
         <div className="sy-actions">
-          <InstallAppButton />
+          <InstallAppButton variant="button" />
           <Link className="sy-btn" to="/login">Sign in</Link>
           <Link className="sy-btn" to="/install">Installation guide</Link>
         </div>

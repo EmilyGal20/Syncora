@@ -86,8 +86,19 @@ class Organization(Base, TimestampMixin):
     primary_color: Mapped[str] = mapped_column(String(7), default="#176B5B")
     secondary_color: Mapped[str] = mapped_column(String(7), default="#3156C8")
     enabled_modules: Mapped[list] = mapped_column(JSON, default=list)
+    install_prompt: Mapped[dict | None] = mapped_column(JSON, default=None)
     logo_storage_key: Mapped[str | None] = mapped_column(String(240))
     logo_content_type: Mapped[str | None] = mapped_column(String(80))
+
+
+class AppNotice(Base, TimestampMixin):
+    __tablename__ = "app_notices"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid4)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    message: Mapped[str] = mapped_column(Text, default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    audience: Mapped[str] = mapped_column(String(20), default="organization")
+    target_ids: Mapped[list] = mapped_column(JSON, default=list)
 
 
 class WorkspaceMembership(Base, TimestampMixin):

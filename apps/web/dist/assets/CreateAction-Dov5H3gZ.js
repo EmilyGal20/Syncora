@@ -1,1 +1,0 @@
-import{j as r}from"./data-BEKm_zJ2.js";import{aP as i,I as a,ac as e}from"./mui-DND_LcML.js";function d({label:o,onClick:t}){return r.jsx(i,{title:o,children:r.jsx(a,{color:"primary",onClick:t,"aria-label":o,sx:{border:1,borderColor:"divider"},children:r.jsx(e,{})})})}export{d as C};

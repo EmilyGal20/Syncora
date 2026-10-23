@@ -157,6 +157,16 @@ export const PAGE_CATALOG: PageDef[] = [
       { code: 'support.internal_notes', labelKey: 'perm.settings.supportNotes', level: 'manage' },
     ],
   },
+  {
+    id: 'install',
+    titleKey: 'install.settingsTitle',
+    show: ['app.install.navbar'],
+    features: [
+      { code: 'app.install.navbar', labelKey: 'perm.install.navbar', level: 'view' },
+      { code: 'app.install.notice', labelKey: 'perm.install.notice', level: 'view' },
+      { code: 'app.install.manage', labelKey: 'perm.install.manage', level: 'manage' },
+    ],
+  },
 ]
 
 export function levelOf(code: string): Level {

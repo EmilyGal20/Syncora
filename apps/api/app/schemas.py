@@ -49,6 +49,7 @@ class UserSummary(ApiModel):
     workspace_primary_color: str = "#176B5B"
     workspace_secondary_color: str = "#3156C8"
     enabled_modules: list[str] = []
+    install_prompt: dict = Field(default_factory=lambda: {"navbar": True, "notice": True, "message": ""})
     must_change_password: bool = False
 
 
@@ -83,6 +84,26 @@ class WorkspaceUpdate(BaseModel):
     enabled_modules: list[str] | None = None
     allow_user_locale: bool | None = None
     allow_user_theme: bool | None = None
+
+
+class InstallPromptUpdate(BaseModel):
+    navbar: bool = True
+    notice: bool = True
+    message: str = Field(default="", max_length=400)
+
+
+class AppNoticeInput(BaseModel):
+    message: str = Field(default="", max_length=400)
+    enabled: bool = True
+    audience: str = Field(default="organization", pattern="^(organization|users|organizations)$")
+    target_ids: list[str] = []
+
+
+class AppNoticeUpdate(BaseModel):
+    message: str | None = Field(default=None, max_length=400)
+    enabled: bool | None = None
+    audience: str | None = Field(default=None, pattern="^(organization|users|organizations)$")
+    target_ids: list[str] | None = None
 
 
 class FileRename(BaseModel):

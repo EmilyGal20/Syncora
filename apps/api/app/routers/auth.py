@@ -11,6 +11,7 @@ from ..database import get_db
 from ..dependencies import authenticated_user, permission_codes, permission_scopes
 from ..models import Organization, RefreshToken, Role, User, WorkspaceMembership
 from ..rate_limit import public_limiter
+from ..install_prompt import normalize_install_prompt
 from ..schemas import ChangePassword, LoginRequest, RefreshRequest, TokenResponse, UserSummary
 from ..security import create_access_token, hash_password, hash_token, new_refresh_token, verify_password
 
@@ -43,6 +44,7 @@ def user_summary(user: User) -> UserSummary:
         workspace_primary_color=workspace.primary_color,
         workspace_secondary_color=workspace.secondary_color,
         enabled_modules=workspace.enabled_modules or [],
+        install_prompt=normalize_install_prompt(getattr(workspace, "install_prompt", None)),
         must_change_password=user.must_change_password,
     )
 

@@ -15,7 +15,7 @@ export function MarketingFrame({ children }: { children: ReactNode }) {
             <img src={wordmark} alt="Syncora" />
           </Link>
           <nav className="sy-nav">
-            <InstallAppButton />
+            <InstallAppButton variant="button" />
             <Link to="/install">Guide</Link>
             {user ? <Link className="primary" to="/dashboard">Open workspace</Link> : <Link className="primary" to="/login">Sign in</Link>}
           </nav>

@@ -1,0 +1,1 @@
+import{j as r}from"./data-BEKm_zJ2.js";import{g as i,h as e,ak as s}from"./mui-Bja9JttH.js";function d({label:o,onClick:t}){return r.jsx(i,{title:o,children:r.jsx(e,{color:"primary",onClick:t,"aria-label":o,sx:{border:1,borderColor:"divider"},children:r.jsx(s,{})})})}export{d as C};

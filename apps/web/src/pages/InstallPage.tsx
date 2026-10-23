@@ -9,7 +9,7 @@ export function InstallPage() {
         <h1>Install and use Syncora</h1>
         <p className="sy-lead">One product, three ways in: the Windows app, a phone icon on the same Wi-Fi, or localhost while you develop. Pick the path that matches the device.</p>
         <div className="sy-actions">
-          <InstallAppButton />
+          <InstallAppButton variant="button" />
           <a className="sy-btn" href="#windows">Windows folder</a>
           <a className="sy-btn" href="#phone">iPhone / Android</a>
           <Link className="sy-btn" to="/login">Sign in</Link>
@@ -20,8 +20,8 @@ export function InstallPage() {
         <div className="sy-steps">
           <article className="sy-step">
             <h3>Desktop or phone</h3>
-            <p>Open Syncora in Chrome, Edge, or Safari. Tap the install icon in the workspace header. After that, launch Syncora from the desktop, the Start menu, or the phone home screen — no extra files and no terminal.</p>
-            <div className="sy-actions"><InstallAppButton /></div>
+            <p>Open Syncora in Chrome, Edge, or Safari. Tap the computer-with-download icon in the header. After that, launch Syncora from the desktop, the Start menu, or the phone home screen — no extra files and no terminal.</p>
+            <div className="sy-actions"><InstallAppButton variant="button" /></div>
           </article>
         </div>
       </section>

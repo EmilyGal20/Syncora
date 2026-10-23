@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
+from .install_prompt import ensure_install_prompt_column
 from .infrastructure.mongodb import mongo
 from .infrastructure.mongodb.migration import migrate_compatibility_documents
 from .routers import auth, band, bookings, collaboration, core, notes, phase2, platform, requests_support
@@ -22,6 +23,7 @@ async def lifespan(_: FastAPI):
     if settings.environment == "development" or settings.app_mode:
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
+            await connection.run_sync(ensure_install_prompt_column)
         async with SessionLocal() as db:
             await seed(db)
             await migrate_compatibility_documents(db)

@@ -1,11 +1,12 @@
-import GetApp from '@mui/icons-material/GetApp'
+import InstallDesktop from '@mui/icons-material/InstallDesktop'
 import IosShare from '@mui/icons-material/IosShare'
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Typography } from '@mui/material'
-import { useEffect, useState } from 'react'
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Tooltip, Typography } from '@mui/material'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useAuth } from '../auth/AuthProvider'
 import { canNativeInstall, isIosDevice, isStandaloneApp, promptInstall, subscribeInstallAvailable } from '../pwa/install'
 
-export function InstallAppButton({ compact = false }: { compact?: boolean }) {
+export function useWorkspaceInstall() {
   const { t } = useTranslation()
   const [installed, setInstalled] = useState(isStandaloneApp)
   const [available, setAvailable] = useState(canNativeInstall)
@@ -27,8 +28,6 @@ export function InstallAppButton({ compact = false }: { compact?: boolean }) {
     }
   }, [])
 
-  if (installed) return null
-
   async function install() {
     if (available) {
       const accepted = await promptInstall()
@@ -38,37 +37,49 @@ export function InstallAppButton({ compact = false }: { compact?: boolean }) {
     setHelp(true)
   }
 
+  const helpDialog = (
+    <Dialog open={help} onClose={() => setHelp(false)} fullWidth maxWidth="xs">
+      <DialogTitle>{t('install.title')}</DialogTitle>
+      <DialogContent>
+        <Typography sx={{ mb: 1.5 }}>{ios ? t('install.ios') : t('install.browser')}</Typography>
+        {ios && (
+          <Typography color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IosShare fontSize="small" /> {t('install.iosShare')}
+          </Typography>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setHelp(false)}>{t('common.close')}</Button>
+      </DialogActions>
+    </Dialog>
+  )
+
+  return { installed, available, install, helpDialog }
+}
+
+export function InstallAppButton({ variant = 'icon' }: { variant?: 'icon' | 'button' }) {
+  const { t } = useTranslation()
+  const { user, can } = useAuth()
+  const { installed, install, helpDialog } = useWorkspaceInstall()
+  const allowed = !user || (can('app.install.navbar') && user.install_prompt?.navbar !== false)
+  if (installed || !allowed) return null
   const label = t('install.action')
+  const tooltip = t('install.tooltip')
+  const control: ReactNode = variant === 'button' ? (
+    <Button variant="contained" size="small" startIcon={<InstallDesktop />} onClick={() => void install()} sx={{ flexShrink: 0 }}>
+      {label}
+    </Button>
+  ) : (
+    <Tooltip title={tooltip}>
+      <IconButton color="inherit" aria-label={tooltip} onClick={() => void install()}>
+        <InstallDesktop />
+      </IconButton>
+    </Tooltip>
+  )
   return (
     <>
-      {compact ? (
-        <IconButton color="primary" aria-label={label} onClick={() => void install()}>
-          <GetApp />
-        </IconButton>
-      ) : (
-        <Button variant="contained" size="small" startIcon={<GetApp />} onClick={() => void install()} sx={{ display: { xs: 'none', sm: 'inline-flex' }, flexShrink: 0 }}>
-          {label}
-        </Button>
-      )}
-      {compact ? null : (
-        <IconButton color="primary" aria-label={label} onClick={() => void install()} sx={{ display: { xs: 'inline-flex', sm: 'none' } }}>
-          <GetApp />
-        </IconButton>
-      )}
-      <Dialog open={help} onClose={() => setHelp(false)} fullWidth maxWidth="xs">
-        <DialogTitle>{t('install.title')}</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ mb: 1.5 }}>{ios ? t('install.ios') : t('install.browser')}</Typography>
-          {ios && (
-            <Typography color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IosShare fontSize="small" /> {t('install.iosShare')}
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setHelp(false)}>{t('common.close')}</Button>
-        </DialogActions>
-      </Dialog>
+      {control}
+      {helpDialog}
     </>
   )
 }
