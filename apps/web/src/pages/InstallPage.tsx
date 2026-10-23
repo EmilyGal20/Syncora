@@ -20,7 +20,7 @@ export function InstallPage() {
         <div className="sy-steps">
           <article className="sy-step">
             <h3>Desktop or phone</h3>
-            <p>Open Syncora in Chrome, Edge, or Safari. Tap <strong>Install app</strong> in the header. After that, launch Syncora from the desktop, the Start menu, or the phone home screen — no extra files and no terminal.</p>
+            <p>Open Syncora in Chrome, Edge, or Safari. Tap the install icon in the workspace header. After that, launch Syncora from the desktop, the Start menu, or the phone home screen — no extra files and no terminal.</p>
             <div className="sy-actions"><InstallAppButton /></div>
           </article>
         </div>

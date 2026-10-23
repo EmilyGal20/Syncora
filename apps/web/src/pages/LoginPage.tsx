@@ -7,7 +7,6 @@ import { useForm } from 'react-hook-form'
 import { Link, Navigate } from 'react-router-dom'
 import { z } from 'zod'
 import { useAuth } from '../auth/AuthProvider'
-import { InstallAppButton } from '../components/InstallAppButton'
 import { SyncoraLoadingSurface, SyncoraLogo } from '../components/SyncoraBrand'
 import { useTranslation } from 'react-i18next'
 
@@ -26,7 +25,7 @@ export function LoginPage(){
   if(transitioning)return <SyncoraLoadingSurface message={t('auth.preparing')}/>
   return <Box sx={{minHeight:'100dvh',display:'grid',gridTemplateColumns:{md:'minmax(min(100%, 420px), 500px) 1fr'},bgcolor:'background.default'}}>
     <Box sx={{display:'grid',alignItems:'center',px:{xs:2,sm:7},py:{xs:3,sm:5},pt:{xs:'max(24px, env(safe-area-inset-top))',sm:5},pb:{xs:'max(24px, env(safe-area-inset-bottom))',sm:5},bgcolor:theme=>theme.palette.mode==='light'?'#F8F8F5':'background.default'}}><Box component="main" sx={{width:'100%',maxWidth:400,mx:'auto'}}>
-      <Box sx={{height:88,display:'flex',alignItems:'center',justifyContent:'space-between',gap:1,mb:3}}><SyncoraLogo asset="wordmark"/><InstallAppButton/></Box>
+      <Box sx={{height:88,display:'flex',alignItems:'center',mb:3}}><SyncoraLogo asset="wordmark"/></Box>
       <Typography variant="h4">{t('auth.welcome')}</Typography><Typography color="text.secondary" sx={{mt:1,mb:4}}>{t('auth.subtitle')}</Typography>
       {error&&<Alert severity="error" sx={{mb:2}}>{error}</Alert>}
       <Box component="form" onSubmit={handleSubmit(async d=>{setError('');setTransitioning(true);const started=Date.now();try{await login(d.identifier,d.password);await new Promise(resolve=>setTimeout(resolve,Math.max(0,650-(Date.now()-started))));setReady(true)}catch(error:unknown){setTransitioning(false);const status=(error as {response?:{status?:number}}).response?.status;setError(status===401?t('auth.invalid'):t('auth.unavailable'))}})} sx={{display:'grid',gap:2}}>
