@@ -8,10 +8,10 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
-from ..config import get_settings
 from ..database import get_db
 from ..dependencies import current_user, permission_codes, require_permission
 from ..messaging import guest_status_url, notify_guest
+from ..origin import public_app_origin
 from ..models import BookingLink, BookingRequest, Event, Organization, User
 from ..rate_limit import public_limiter
 from ..realtime import realtime_hub
@@ -63,8 +63,8 @@ async def unique_slug(db: AsyncSession, base: str, exclude_id: str | None = None
         index += 1
 
 
-def link_json(value: BookingLink) -> dict:
-    origin = get_settings().public_app_url.rstrip("/")
+def link_json(value: BookingLink, request: Request | None = None) -> dict:
+    origin = public_app_origin(request)
     path = f"/book/{value.slug}"
     return {
         "id": value.id,
@@ -79,7 +79,7 @@ def link_json(value: BookingLink) -> dict:
     }
 
 
-def request_json(value: BookingRequest, include_token: bool = False) -> dict:
+def request_json(value: BookingRequest, include_token: bool = False, request: Request | None = None) -> dict:
     payload = {
         "id": value.id,
         "link_id": value.link_id,
@@ -98,7 +98,7 @@ def request_json(value: BookingRequest, include_token: bool = False) -> dict:
         "rejection_reason": value.rejection_reason,
         "messages": value.messages or [],
         "created_at": value.created_at,
-        "status_url": guest_status_url(value.guest_token),
+        "status_url": guest_status_url(value.guest_token, request),
     }
     if include_token:
         payload["guest_token"] = value.guest_token
@@ -161,19 +161,20 @@ async def get_org(db: AsyncSession, organization_id: str) -> Organization:
 
 
 @router.get("/booking-links")
-async def list_booking_links(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def list_booking_links(request: Request, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     org = await get_org(db, user.organization_id)
     links = await ensure_links(db, user, org)
     await db.commit()
     personal = [item for item in links if item.owner_user_id == user.id]
     workspace = [item for item in links if item.owner_user_id is None]
-    return {"personal": [link_json(item) for item in personal], "workspace": [link_json(item) for item in workspace]}
+    return {"personal": [link_json(item, request) for item in personal], "workspace": [link_json(item, request) for item in workspace]}
 
 
 @router.patch("/booking-links/{link_id}")
 async def update_booking_link(
     link_id: str,
     body: BookingLinkUpdate,
+    request: Request,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -197,10 +198,10 @@ async def update_booking_link(
     if body.duration_minutes is not None:
         link.duration_minutes = body.duration_minutes
     await db.commit()
-    return link_json(link)
+    return link_json(link, request)
 
 
-async def _schedule_approved(db: AsyncSession, user: User, booking: BookingRequest, kind: str, message: str) -> Event:
+async def _schedule_approved(db: AsyncSession, user: User, booking: BookingRequest, kind: str, message: str, request: Request | None = None) -> Event:
     event = Event(
         organization_id=user.organization_id,
         title=f"{booking.guest_name} — {booking.reason}",
@@ -220,25 +221,26 @@ async def _schedule_approved(db: AsyncSession, user: User, booking: BookingReque
     await db.flush()
     booking.status = "approved"
     booking.event_id = event.id
-    await notify_guest(db, booking, "approved", message)
+    await notify_guest(db, booking, "approved", message, request)
     attributes.flag_modified(booking, "messages")
     return event
 
 
 @router.get("/bookings")
-async def list_bookings(status: str | None = None, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+async def list_bookings(request: Request, status: str | None = None, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     filters = [BookingRequest.organization_id == user.organization_id]
     if not is_admin(user):
         filters.append(BookingRequest.host_user_id == user.id)
     if status:
         filters.append(BookingRequest.status == status)
     values = (await db.scalars(select(BookingRequest).where(and_(*filters)).order_by(BookingRequest.created_at.desc()))).all()
-    return [request_json(value) for value in values]
+    return [request_json(value, request=request) for value in values]
 
 
 @router.post("/bookings", status_code=201)
 async def create_host_booking(
     body: HostBookingInput,
+    request: Request,
     user: User = Depends(require_permission("schedule.create")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -272,21 +274,21 @@ async def create_host_booking(
     )
     db.add(booking)
     await db.flush()
-    event = await _schedule_approved(db, user, booking, body.kind, f"Your meeting with {user.full_name} was scheduled.")
+    event = await _schedule_approved(db, user, booking, body.kind, f"Your meeting with {user.full_name} was scheduled.", request)
     await db.commit()
     await realtime_hub.publish(user.organization_id, "event.created", {"id": event.id}, {user.id})
     await realtime_hub.publish(user.organization_id, "booking.updated", {"id": booking.id}, {user.id})
-    return request_json(booking)
+    return request_json(booking, request=request)
 
 
 @router.post("/bookings/{booking_id}/approve")
-async def approve_booking(booking_id: str, user: User = Depends(require_permission("schedule.create")), db: AsyncSession = Depends(get_db)):
+async def approve_booking(booking_id: str, request: Request, user: User = Depends(require_permission("schedule.create")), db: AsyncSession = Depends(get_db)):
     booking = await _host_booking(db, user, booking_id)
     if booking.status != "pending":
         raise HTTPException(status_code=409, detail="This request was already handled")
     link = await db.scalar(select(BookingLink).where(BookingLink.id == booking.link_id))
     kind = link.kind if link else "meeting"
-    event = await _schedule_approved(db, user, booking, kind, f"Your meeting with {user.full_name} was approved.")
+    event = await _schedule_approved(db, user, booking, kind, f"Your meeting with {user.full_name} was approved.", request)
     await create_notification(
         db,
         organization_id=user.organization_id,
@@ -302,13 +304,14 @@ async def approve_booking(booking_id: str, user: User = Depends(require_permissi
     await realtime_hub.publish(user.organization_id, "event.created", {"id": event.id}, {booking.host_user_id})
     await realtime_hub.publish(user.organization_id, "booking.updated", {"id": booking.id}, {booking.host_user_id})
     await realtime_hub.publish(user.organization_id, "notification.created", {}, {booking.host_user_id})
-    return request_json(booking)
+    return request_json(booking, request=request)
 
 
 @router.post("/bookings/{booking_id}/reject")
 async def reject_booking(
     booking_id: str,
     body: BookingDecision,
+    request: Request,
     user: User = Depends(require_permission("schedule.create")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -318,7 +321,7 @@ async def reject_booking(
     booking.status = "rejected"
     booking.rejection_reason = body.reason.strip()
     reason_text = booking.rejection_reason or "No reason was provided."
-    await notify_guest(db, booking, "rejected", f"Your meeting request was not approved. {reason_text}")
+    await notify_guest(db, booking, "rejected", f"Your meeting request was not approved. {reason_text}", request)
     attributes.flag_modified(booking, "messages")
     await create_notification(
         db,
@@ -334,7 +337,7 @@ async def reject_booking(
     await db.commit()
     await realtime_hub.publish(user.organization_id, "booking.updated", {"id": booking.id}, {booking.host_user_id})
     await realtime_hub.publish(user.organization_id, "notification.created", {}, {booking.host_user_id})
-    return request_json(booking)
+    return request_json(booking, request=request)
 
 
 @router.get("/public/booking-links/{slug}")
@@ -410,17 +413,17 @@ async def public_create_booking(slug: str, body: PublicBookingInput, request: Re
     await db.commit()
     await realtime_hub.publish(link.organization_id, "notification.created", {"id": booking.id}, {host_id})
     await realtime_hub.publish(link.organization_id, "booking.created", {"id": booking.id}, {host_id})
-    return {"status": "submitted", "guest_token": booking.guest_token, "status_url": guest_status_url(booking.guest_token)}
+    return {"status": "submitted", "guest_token": booking.guest_token, "status_url": guest_status_url(booking.guest_token, request)}
 
 
 @router.get("/public/bookings/{token}")
-async def public_booking_status(token: str, db: AsyncSession = Depends(get_db)):
+async def public_booking_status(token: str, request: Request, db: AsyncSession = Depends(get_db)):
     booking = await db.scalar(select(BookingRequest).where(BookingRequest.guest_token == token))
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     org = await get_org(db, booking.organization_id)
     host = await db.scalar(select(User).where(User.id == booking.host_user_id))
-    payload = request_json(booking, include_token=True)
+    payload = request_json(booking, include_token=True, request=request)
     payload["workspace_name"] = org.name
     payload["host_name"] = host.full_name if host else org.name
     return payload

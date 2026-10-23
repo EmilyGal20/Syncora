@@ -35,15 +35,25 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader title={t('settings.title')} subtitle={admin ? t('settings.admin.subtitle') : undefined} />
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: admin ? '200px 1fr' : '1fr' }, gap: 2, alignItems: 'start' }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: admin ? '220px 1fr' : '1fr' }, gap: 2, alignItems: 'start' }}>
         {admin && (
-          <List dense sx={{ border: 1, borderColor: 'divider', borderRadius: 2, py: 0.5 }}>
+          <>
+            <FormControl fullWidth size="small" sx={{ display: { xs: 'flex', md: 'none' } }}>
+              <InputLabel>{t('settings.title')}</InputLabel>
+              <Select label={t('settings.title')} value={panel} onChange={(e) => setParams({ panel: String(e.target.value) })}>
+                {panels.map((item) => (
+                  <MenuItem key={item.id} value={item.id}>{item.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <List dense sx={{ display: { xs: 'none', md: 'block' }, border: 1, borderColor: 'divider', borderRadius: 2, py: 0.5 }}>
             {panels.map((item) => (
               <ListItemButton key={item.id} selected={panel === item.id} onClick={() => setParams({ panel: item.id })}>
                 <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: 13, fontWeight: panel === item.id ? 700 : 500 }} />
               </ListItemButton>
             ))}
-          </List>
+            </List>
+          </>
         )}
         <Box sx={{ minWidth: 0 }}>
           {panel === 'permissions' && <PagePermissions />}

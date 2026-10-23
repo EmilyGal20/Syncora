@@ -47,7 +47,7 @@ export function PermissionAccordion({
                 <FormControlLabel
                   key={`${page.id}-${feature.code}-${index}`}
                   control={<Checkbox checked={allowed.has(feature.code)} onChange={(_, checked) => onToggle(feature.code, checked)} />}
-                  label={feature.label}
+                  label={feature.label ?? feature.labelKey}
                 />
               ))}
             </Stack>

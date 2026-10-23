@@ -2,6 +2,8 @@
   "name": "syncora",
   "private": true,
   "scripts": {
+    "app": "node scripts/start-app.mjs",
+    "app:build": "npm --prefix apps/web run build",
     "dev": "node scripts/dev.mjs all",
     "dev:frontend": "node scripts/dev.mjs frontend",
     "dev:backend": "node scripts/dev.mjs backend",

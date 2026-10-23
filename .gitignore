@@ -6,6 +6,8 @@ __pycache__/
 *.py[cod]
 node_modules/
 dist/
+!apps/web/dist/
+!apps/web/dist/**
 *.tsbuildinfo
 apps/web/vite.config.js
 apps/web/vite.config.d.ts

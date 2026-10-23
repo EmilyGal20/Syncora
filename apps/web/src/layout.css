@@ -1,0 +1,43 @@
+html {
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100dvh;
+  min-height: 100svh;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+table {
+  max-width: 100%;
+}
+
+button,
+[role='button'],
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+@media (max-width: 599px) {
+  .MuiDialog-paper:not(.MuiDialog-paperFullScreen) {
+    margin: 12px;
+    width: calc(100% - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+}

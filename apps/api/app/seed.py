@@ -358,6 +358,8 @@ async def seed(db: AsyncSession) -> None:
                 title="Company planning",
                 starts_at=datetime.now(UTC) + timedelta(days=1),
                 ends_at=datetime.now(UTC) + timedelta(days=1, hours=1),
+                creator_id=admin.id,
+                owner_user_id=admin.id,
             ),
             Announcement(
                 organization_id=org.id,

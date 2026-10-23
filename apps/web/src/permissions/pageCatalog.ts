@@ -1,6 +1,6 @@
 export type Level = 'view' | 'edit' | 'manage'
-export interface FeatureDef { code: string; labelKey: string; level: Level }
-export interface PageDef { id: string; titleKey: string; show: string[]; features: FeatureDef[] }
+export interface FeatureDef { code: string; labelKey: string; level: Level; label?: string }
+export interface PageDef { id: string; titleKey: string; show: string[]; features: FeatureDef[]; title?: string }
 
 export const GRANTOR_CODES = [
   'access_requests.manage',

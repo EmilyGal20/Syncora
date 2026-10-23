@@ -25,10 +25,10 @@ export function DashboardPage() {
   const { can, user } = useAuth()
   const { preferences } = usePreferences()
   const greeting = useMemo(() => {
-    const period = t(`dashboard.greetings.${greetingPeriod(new Date(), preferences.timezone)}`)
+    const period = t(`dashboard.greetings.${greetingPeriod(new Date(), preferences?.timezone)}`)
     const name = (user?.first_name || user?.full_name || '').trim()
     return name ? t('dashboard.greetingNamed', { greeting: period, name }) : period
-  }, [t, preferences.timezone, user?.first_name, user?.full_name])
+  }, [t, preferences?.timezone, user?.first_name, user?.full_name])
   const q = useQuery({
     queryKey: ['dashboard'],
     queryFn: async () => {

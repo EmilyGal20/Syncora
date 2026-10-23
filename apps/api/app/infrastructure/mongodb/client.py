@@ -15,6 +15,10 @@ class MongoState:
 
     async def connect(self) -> None:
         settings = get_settings()
+        if settings.app_mode:
+            self.available = False
+            self.error = "disabled-in-app-mode"
+            return
         try:
             self.client = AsyncMongoClient(
                 settings.mongodb_uri,

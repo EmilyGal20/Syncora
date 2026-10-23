@@ -1,0 +1,14 @@
+{
+  "name": "Syncora",
+  "short_name": "Syncora",
+  "description": "Plan, Manage, Connect",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#18332e",
+  "theme_color": "#18332e",
+  "icons": [
+    { "src": "/logos/syncora-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

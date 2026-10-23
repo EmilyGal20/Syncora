@@ -6,5 +6,9 @@ import App from './App'
 import { AuthProvider } from './auth/AuthProvider'
 import { WorkspaceProvider } from './preferences/WorkspaceProvider'
 import './i18n'
+import './layout.css'
+import { registerSyncoraPwa } from './pwa/install'
+
+registerSyncoraPwa()
 const queryClient=new QueryClient({defaultOptions:{queries:{staleTime:30_000,retry:1}}})
 createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><WorkspaceProvider><App/></WorkspaceProvider></AuthProvider></BrowserRouter></QueryClientProvider></StrictMode>)

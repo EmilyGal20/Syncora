@@ -98,7 +98,7 @@ function EngineOverview() {
         <QuickAdd createTask={createTask} now={now} />
       </Stack>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, 1fr)' }, gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' }, gap: 2, mb: 2 }}>
         <Stat label={t('dashboard.engine.completedToday')} value={`${overview.completedToday} / ${settings.dailyGoal}`} hint={<LinearProgress variant="determinate" value={overview.goalProgress} sx={{ mt: 1, height: 7, borderRadius: 1 }} />} />
         <Stat label={t('dashboard.engine.dueToday')} value={dueTodayOpen.length} hint={t('dashboard.engine.openTotal', { count: openCount })} onClick={() => navigate('/flow/tasks')} />
         <Stat label={t('dashboard.engine.overdue')} value={overdue.length} hint={overdue.length ? t('dashboard.engine.needsAttention') : t('dashboard.engine.caughtUp')} onClick={() => navigate('/flow/tasks')} />

@@ -66,7 +66,7 @@ export function AppLayout({ children, pageKey }: { children: ReactNode; pageKey:
 
       <div className={embedded ? '' : 'transition-[padding] duration-200 ease-out lg:pl-[var(--sidebar-w)]'}>
         <Topbar />
-        <main className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8">
+        <main className="mx-auto max-w-[1400px] px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6 lg:max-w-[1680px] lg:px-8 lg:pb-10 lg:pt-8 xl:max-w-[1920px]">
           <motion.div key={pageKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: 'easeOut' }}>
             {children}
           </motion.div>
@@ -77,7 +77,7 @@ export function AppLayout({ children, pageKey }: { children: ReactNode; pageKey:
       {selectedIds.length === 0 && route.name !== 'planner' && (
       <button
         onClick={() => openTaskForm(route.name === 'project' ? { defaults: { projectId: route.id } } : undefined)}
-        className="fixed bottom-5 right-5 z-20 grid h-14 w-14 place-items-center rounded-2xl bg-violet-600 text-white shadow-glow transition active:scale-95 sm:hidden"
+        className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))] z-20 grid h-14 w-14 place-items-center rounded-2xl bg-violet-600 text-white shadow-glow transition active:scale-95 sm:hidden"
         aria-label="Quick add task"
       >
         <Plus className="h-6 w-6" />

@@ -3,12 +3,15 @@ from typing import Any
 
 import httpx
 
+from fastapi import Request
+
 from .config import get_settings
 from .models import BookingRequest, DomainOutbox
+from .origin import public_app_origin
 
 
-def guest_status_url(token: str) -> str:
-    base = get_settings().public_app_url.rstrip("/")
+def guest_status_url(token: str, request: Request | None = None) -> str:
+    base = public_app_origin(request)
     return f"{base}/book/status/{token}"
 
 
@@ -31,7 +34,7 @@ async def send_sms(phone: str, body: str) -> str:
         return "failed"
 
 
-async def notify_guest(db, booking: BookingRequest, kind: str, body: str) -> None:
+async def notify_guest(db, booking: BookingRequest, kind: str, body: str, request: Request | None = None) -> None:
     history = list(booking.messages or [])
     history.append({"at": datetime.now(UTC).isoformat(), "kind": kind, "body": body})
     booking.messages = history[-40:]
@@ -45,6 +48,6 @@ async def notify_guest(db, booking: BookingRequest, kind: str, body: str) -> Non
         )
     )
     if booking.guest_phone:
-        status = await send_sms(booking.guest_phone, f"{body} View details: {guest_status_url(booking.guest_token)}")
+        status = await send_sms(booking.guest_phone, f"{body} View details: {guest_status_url(booking.guest_token, request)}")
         history[-1]["sms"] = status
         booking.messages = history[-40:]
