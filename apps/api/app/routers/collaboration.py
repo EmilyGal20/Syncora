@@ -29,7 +29,7 @@ router = APIRouter(tags=["collaboration"])
 
 
 def notification_json(value: Notification) -> dict:
-    return {"id": value.id, "type": value.type, "title": value.title, "message": value.message, "resource_type": value.resource_type, "resource_id": value.resource_id, "route": value.route, "read_at": value.read_at, "created_at": value.created_at}
+    return {"id": value.id, "type": value.type, "title": value.title, "message": value.message, "resource_type": value.resource_type, "resource_id": value.resource_id, "route": value.route, "read_at": value.read_at.isoformat() if value.read_at else None, "created_at": value.created_at.isoformat() if value.created_at else None}
 
 
 async def create_notification(db: AsyncSession, *, organization_id: str, recipient_id: str, event_type: str, title: str, message: str = "", resource_type: str | None = None, resource_id: str | None = None, route: str | None = None) -> Notification:

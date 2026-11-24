@@ -160,11 +160,22 @@ export const PAGE_CATALOG: PageDef[] = [
   {
     id: 'install',
     titleKey: 'install.settingsTitle',
-    show: ['app.install.navbar'],
+    show: ['app.install.notice'],
     features: [
-      { code: 'app.install.navbar', labelKey: 'perm.install.navbar', level: 'view' },
       { code: 'app.install.notice', labelKey: 'perm.install.notice', level: 'view' },
+      { code: 'app.install.navbar', labelKey: 'perm.install.navbar', level: 'view' },
       { code: 'app.install.manage', labelKey: 'perm.install.manage', level: 'manage' },
+    ],
+  },
+  {
+    id: 'systemNotifications',
+    titleKey: 'systemNotifications.title',
+    show: ['system_notifications.button'],
+    features: [
+      { code: 'system_notifications.button', labelKey: 'perm.systemNotifications.button', level: 'view' },
+      { code: 'system_notifications.receive', labelKey: 'perm.systemNotifications.receive', level: 'view' },
+      { code: 'system_notifications.enabled', labelKey: 'perm.systemNotifications.enabled', level: 'view' },
+      { code: 'system_notifications.manage', labelKey: 'perm.systemNotifications.manage', level: 'manage' },
     ],
   },
 ]

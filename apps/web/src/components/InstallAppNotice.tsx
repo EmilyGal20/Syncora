@@ -1,67 +1,72 @@
-import InstallDesktop from '@mui/icons-material/InstallDesktop'
-import { Alert, Button, Snackbar } from '@mui/material'
+import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
-import { isStandaloneApp } from '../pwa/install'
-import { useWorkspaceInstall } from './InstallAppButton'
+import { useAuth } from '../auth/AuthProvider'
+import { isStandaloneApp, shouldAskInstall } from '../pwa/install'
+import { openInstallDialog, useWorkspaceInstall } from './InstallAppButton'
 
 interface VisibleNotice { id: string; message: string }
 
-const seenKey = (id: string) => `syncora_install_notice_${id}`
+const hiddenKey = (userId: string) => `syncora_install_prompt_hidden_${userId}`
+const seenKey = (userId: string) => `syncora_install_prompt_seen_${userId}`
 
 export function InstallAppNotice() {
   const { t } = useTranslation()
-  const { install, helpDialog } = useWorkspaceInstall()
-  const [current, setCurrent] = useState<VisibleNotice | null>(null)
+  const { user, can } = useAuth()
+  const { installed } = useWorkspaceInstall()
+  const [open, setOpen] = useState(false)
+  const [dontShow, setDontShow] = useState(false)
+  const [openInstallAfterClose, setOpenInstallAfterClose] = useState(false)
   const notices = useQuery({
     queryKey: ['visible-app-notices'],
+    enabled: !!user,
     queryFn: async () => (await api.get<VisibleNotice[]>('/app-notices')).data,
   })
-  const pending = useMemo(
-    () => (notices.data ?? []).filter((item) => !sessionStorage.getItem(seenKey(item.id))),
-    [notices.data],
-  )
 
   useEffect(() => {
-    if (isStandaloneApp()) {
-      setCurrent(null)
-      return
-    }
-    setCurrent(pending[0] ?? null)
-  }, [pending])
+    if (!user) return
+    const allowed = can('app.install.notice') && user.install_prompt?.notice !== false
+    const hidden = localStorage.getItem(hiddenKey(user.id)) === '1'
+    const seen = sessionStorage.getItem(seenKey(user.id)) === '1'
+    setOpen(shouldAskInstall({ allowed, installed: installed || isStandaloneApp(), hidden, seen }))
+  }, [user, can, installed, notices.data])
 
-  function dismiss() {
-    if (current) sessionStorage.setItem(seenKey(current.id), '1')
-    const rest = pending.filter((item) => item.id !== current?.id)
-    setCurrent(rest[0] ?? null)
+  function remember() {
+    if (!user) return
+    sessionStorage.setItem(seenKey(user.id), '1')
+    if (dontShow) localStorage.setItem(hiddenKey(user.id), '1')
+    setOpen(false)
   }
 
-  async function installNow() {
-    await install()
-    dismiss()
+  function accept() {
+    setOpenInstallAfterClose(true)
+    remember()
   }
 
-  const message = current?.message.trim() || t('install.notice')
+  function finishedClosing() {
+    if (!openInstallAfterClose) return
+    setOpenInstallAfterClose(false)
+    openInstallDialog()
+  }
+
+  const message = notices.data?.find((item) => item.message.trim())?.message.trim() || t('install.notice')
   return (
-    <>
-      <Snackbar open={Boolean(current)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert
-          severity="info"
-          icon={<InstallDesktop />}
-          onClose={dismiss}
-          action={
-            <Button color="inherit" size="small" onClick={() => void installNow()}>
-              {t('install.noticeAction')}
-            </Button>
-          }
-          sx={{ alignItems: 'center' }}
-        >
-          {message}
-        </Alert>
-      </Snackbar>
-      {helpDialog}
-    </>
+    <Dialog open={open} onClose={remember} TransitionProps={{ onExited: finishedClosing }} fullWidth maxWidth="xs">
+      <DialogTitle>{t('install.askTitle')}</DialogTitle>
+      <DialogContent>
+        <Typography>{message}</Typography>
+        <FormControlLabel
+          sx={{ display: 'flex', mt: 1 }}
+          control={<Checkbox checked={dontShow} onChange={(_, checked) => setDontShow(checked)} />}
+          label={t('install.dontShowAgain')}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={remember}>{t('install.askNo')}</Button>
+        <Button variant="contained" onClick={accept}>{t('install.askYes')}</Button>
+      </DialogActions>
+    </Dialog>
   )
 }

@@ -87,6 +87,7 @@ class Organization(Base, TimestampMixin):
     secondary_color: Mapped[str] = mapped_column(String(7), default="#3156C8")
     enabled_modules: Mapped[list] = mapped_column(JSON, default=list)
     install_prompt: Mapped[dict | None] = mapped_column(JSON, default=None)
+    system_notifications: Mapped[dict | None] = mapped_column(JSON, default=None)
     logo_storage_key: Mapped[str | None] = mapped_column(String(240))
     logo_content_type: Mapped[str | None] = mapped_column(String(80))
 

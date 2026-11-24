@@ -9,9 +9,10 @@ from sqlalchemy import text
 from .config import get_settings
 from .database import Base, SessionLocal, engine
 from .install_prompt import ensure_install_prompt_column
+from .system_notifications import ensure_system_notifications_column
 from .infrastructure.mongodb import mongo
 from .infrastructure.mongodb.migration import migrate_compatibility_documents
-from .routers import auth, band, bookings, collaboration, core, notes, phase2, platform, requests_support
+from .routers import auth, band, bookings, collaboration, core, notes, phase2, platform, requests_support, system_notifications
 from .seed import seed
 
 settings = get_settings()
@@ -24,6 +25,7 @@ async def lifespan(_: FastAPI):
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
             await connection.run_sync(ensure_install_prompt_column)
+            await connection.run_sync(ensure_system_notifications_column)
         async with SessionLocal() as db:
             await seed(db)
             await migrate_compatibility_documents(db)
@@ -84,6 +86,7 @@ app.include_router(collaboration.router, prefix="/api/v1")
 app.include_router(requests_support.router, prefix="/api/v1")
 app.include_router(notes.router, prefix="/api/v1")
 app.include_router(bookings.router, prefix="/api/v1")
+app.include_router(system_notifications.router, prefix="/api/v1")
 
 WEB_DIST = Path(__file__).resolve().parents[3] / "apps" / "web" / "dist"
 

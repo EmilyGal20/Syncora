@@ -27,6 +27,10 @@ export function shouldOfferWorkspaceInstall(options: { allowed: boolean; install
   return options.allowed && options.enabled && !options.installed
 }
 
+export function shouldAskInstall(options: { allowed: boolean; installed: boolean; hidden: boolean; seen: boolean }) {
+  return options.allowed && !options.installed && !options.hidden && !options.seen
+}
+
 export function subscribeInstallAvailable(listener: () => void) {
   listeners.add(listener)
   return () => listeners.delete(listener)

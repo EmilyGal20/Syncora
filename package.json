@@ -9,7 +9,7 @@
     "dev:backend": "node scripts/dev.mjs backend",
     "frontend": "npm run dev:frontend",
     "backend": "npm run dev:backend",
-    "dev:api": ".\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8500 --app-dir apps/api",
+    "dev:api": "node scripts/dev.mjs api",
     "dev:audit": "dotnet run --project apps/services/Syncora.Audit/Syncora.Audit.csproj -- --environment Development --urls http://0.0.0.0:8501",
     "build": "npm --prefix apps/web run build && dotnet build apps/services/Syncora.Audit/Syncora.Audit.csproj --configuration Release",
     "lint": "npm --prefix apps/web run lint && python -m ruff check apps/api",

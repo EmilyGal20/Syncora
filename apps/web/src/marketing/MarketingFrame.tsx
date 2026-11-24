@@ -11,12 +11,12 @@ export function MarketingFrame({ children }: { children: ReactNode }) {
     <div className="sy-page">
       <main className="sy-site">
         <div className="sy-top">
-          <Link to="/" aria-label="Syncora home">
+          <Link to={user ? '/dashboard' : '/login'} aria-label="Syncora">
             <img src={wordmark} alt="Syncora" />
           </Link>
           <nav className="sy-nav">
             <InstallAppButton variant="button" />
-            <Link to="/install">Guide</Link>
+            <Link to="/install">Install</Link>
             {user ? <Link className="primary" to="/dashboard">Open workspace</Link> : <Link className="primary" to="/login">Sign in</Link>}
           </nav>
         </div>

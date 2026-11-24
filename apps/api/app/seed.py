@@ -106,6 +106,10 @@ PERMISSIONS = [
     "app.install.navbar",
     "app.install.notice",
     "app.install.manage",
+    "system_notifications.button",
+    "system_notifications.receive",
+    "system_notifications.enabled",
+    "system_notifications.manage",
 ]
 
 
@@ -188,6 +192,9 @@ async def ensure_access_grants(db: AsyncSession, org: Organization, admin_role: 
         "profile.edit",
         "app.install.navbar",
         "app.install.notice",
+        "system_notifications.button",
+        "system_notifications.receive",
+        "system_notifications.enabled",
     }
     db.add_all(
         [
