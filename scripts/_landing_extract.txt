@@ -1,0 +1,580 @@
+CSS_START
+
+      @font-face {
+        font-family: "Assistant";
+        src: url() format("truetype");
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Assistant";
+        src: url() format("truetype");
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Assistant";
+        src: url() format("truetype");
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+      :root {
+        color-scheme: light;
+        --bg:
+          radial-gradient(circle at top right, rgba(129, 181, 205, 0.28), transparent 24%),
+          radial-gradient(circle at 15% 10%, rgba(255, 255, 255, 0.72), transparent 22%),
+          linear-gradient(180deg, #eef4f8 0%, #dde7ef 100%);
+        --text: #14202a;
+        --muted: #627482;
+        --line: rgba(98, 125, 144, 0.22);
+        --accent: #2e7da0;
+        --accent-strong: #1f6380;
+        --teal: #1f9b9a;
+        --shadow: 0 18px 40px rgba(63, 89, 108, 0.12);
+        --page-gutter: clamp(1.2rem, 5vw, 2.2rem);
+        --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+        --reveal-duration: 0.65s;
+        --logo: url();
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      html, body { max-width: 100%; }
+      body {
+        margin: 0;
+        min-width: 320px;
+        overflow-x: hidden;
+        background: var(--bg);
+        background-attachment: fixed;
+        color: var(--text);
+        font-family: Assistant, "Segoe UI", Arial, sans-serif;
+        text-align: center;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: -20% -10%;
+        z-index: -2;
+        pointer-events: none;
+        background:
+          radial-gradient(ellipse at 30% 10%, rgba(85, 213, 149, 0.16), transparent 42%),
+          radial-gradient(ellipse at 70% 0%, rgba(46, 125, 160, 0.14), transparent 38%);
+      }
+      img { max-width: 100%; height: auto; }
+      a { color: inherit; }
+
+      .site {
+        width: 100%;
+        max-width: 56rem;
+        margin: 0 auto;
+        padding-inline: max(0.7rem, env(safe-area-inset-inline-start, 0px))
+          max(0.7rem, env(safe-area-inset-inline-end, 0px));
+      }
+      .section {
+        position: relative;
+        padding-block: max(3.4rem, calc(env(safe-area-inset-top) + 2.6rem)) 2.6rem;
+        padding-inline: var(--page-gutter);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        isolation: isolate;
+      }
+      .section::after {
+        content: "";
+        position: absolute;
+        inset-inline: 18%;
+        bottom: 2.4rem;
+        height: 10px;
+        z-index: -1;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, rgba(46, 125, 160, 0.55), transparent);
+        filter: blur(10px);
+        opacity: 0.4;
+      }
+      .hero {
+        padding-top: max(1.55rem, calc(env(safe-area-inset-top) + 0.85rem));
+        overflow: hidden;
+      }
+      .hero-portal {
+        position: absolute;
+        z-index: 2;
+        top: max(0.7rem, env(safe-area-inset-top));
+        left: max(0.85rem, env(safe-area-inset-left));
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+      }
+      .hero-portal .logo-portal {
+        height: clamp(2.05rem, 5.6vw, 2.75rem);
+        max-width: 10.5rem;
+      }
+
+      h1, h2, h3, p, figure, ul { margin: 0; }
+      h1, h2, h3 {
+        font-weight: 900;
+        line-height: 1.15;
+        text-align: center;
+      }
+      h1 {
+        position: relative;
+        z-index: 1;
+        max-width: 18ch;
+        font-size: clamp(1.85rem, 8.4vw, 3.35rem);
+      }
+      h2 { font-size: clamp(1.45rem, 6.6vw, 2.7rem); }
+      .lead, .section > p {
+        color: var(--muted);
+        font-size: clamp(0.95rem, 3.6vw, 1.08rem);
+        line-height: 1.6;
+        max-width: 36rem;
+        margin-top: 1rem;
+      }
+
+      .hero-mark {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        width: 100%;
+        margin: 0.35rem auto 0.2rem;
+        min-height: 0;
+      }
+      .hero-mark::before {
+        content: "";
+        position: absolute;
+        width: min(68%, 16.5rem);
+        aspect-ratio: 1;
+        border-radius: 999px;
+        background: rgba(46, 125, 160, 0.28);
+        filter: blur(42px);
+        z-index: 0;
+      }
+      .hero.is-entered .hero-mark::before {
+        animation: logoBreath 5.5s ease-in-out infinite;
+      }
+      .hero-mark-hit {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        width: min(100%, 28rem);
+        padding: 0;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+      .logo-bars {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 720 / 190;
+        display: block;
+        overflow: visible;
+        direction: ltr;
+        pointer-events: none;
+      }
+      .logo-bars .logo-bar {
+        transform-box: fill-box;
+        transform-origin: center bottom;
+      }
+      .logo-bars.is-waving .logo-bar {
+        animation: logo-bar-wave 0.55s ease-in-out both;
+        animation-delay: calc(var(--i) * 45ms);
+      }
+
+      .brand-pills {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: center;
+        align-items: center;
+        gap: 0.85rem;
+        width: 100%;
+        margin: 0.35rem 0 0.85rem;
+      }
+      .brand-pills i {
+        flex-shrink: 0;
+        width: 1px;
+        height: 1.7rem;
+        background: rgba(20, 32, 42, 0.16);
+      }
+      .brand-logo {
+        display: grid;
+        place-items: center;
+        height: clamp(2.8rem, 12vw, 4rem);
+        padding: 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+      }
+      .logo-word,
+      .logo-portal {
+        display: block;
+        height: clamp(1.7rem, 7vw, 2.45rem);
+        width: auto;
+        max-width: min(40vw, 11.5rem);
+        object-fit: contain;
+      }
+
+      .scroll-hint {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.12rem;
+        width: fit-content;
+        margin: 0.85rem auto 0;
+        text-decoration: none;
+        transition: opacity 0.45s ease;
+      }
+      .scroll-hint span {
+        display: block;
+        width: 0.72rem;
+        height: 0.72rem;
+        border-right: 2px solid var(--accent);
+        border-bottom: 2px solid var(--accent);
+        transform: rotate(45deg);
+        opacity: 0.55;
+        animation: scroll-chevrons 1.6s ease-in-out infinite;
+      }
+      .scroll-hint span:last-child {
+        margin-top: -0.28rem;
+        animation-delay: 0.18s;
+      }
+      .hero-scroll-hint.is-faded { opacity: 0.18; pointer-events: none; }
+      .hero-scroll-hint.is-gone { opacity: 0; pointer-events: none; }
+
+      .marquee {
+        overflow: hidden;
+        border-block: 1px solid rgba(98, 125, 144, 0.16);
+        background: rgba(255, 255, 255, 0.55);
+        mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+      }
+      .marquee-track {
+        display: flex;
+        align-items: center;
+        direction: ltr;
+        width: max-content;
+        padding: 0.85rem 0;
+        animation: marquee 34s linear infinite;
+      }
+      .marquee-track span {
+        display: inline-flex;
+        align-items: center;
+        direction: rtl;
+        white-space: nowrap;
+        color: #304353;
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+      .marquee-track span::after {
+        content: "";
+        width: 0.32rem;
+        height: 0.32rem;
+        margin-inline: 1.15rem;
+        border-radius: 50%;
+        background: var(--teal);
+      }
+
+      .platform { padding-block: 4.8rem 4.4rem; }
+      .feature-grid {
+        list-style: none;
+        padding: 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+        margin-top: 1.5rem;
+      }
+      .feature-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 1rem 0.75rem;
+        text-align: center;
+        border: 1px solid transparent;
+        border-radius: 0.9rem;
+        transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      }
+      .feature-card:nth-child(odd)::after {
+        content: "";
+        position: absolute;
+        inset-inline-end: 0;
+        top: 14%;
+        bottom: 14%;
+        width: 1px;
+        background: rgba(46, 125, 160, 0.22);
+      }
+      .feature-card:active, .feature-card.is-pressed {
+        transform: scale(0.98);
+        border-color: rgba(46, 125, 160, 0.35);
+        box-shadow: 0 0 0 1px rgba(46, 125, 160, 0.12), 0 10px 24px rgba(46, 125, 160, 0.12);
+      }
+      .feature-icon {
+        display: grid;
+        place-items: center;
+        width: 2.1rem;
+        height: 2.1rem;
+        color: var(--accent);
+      }
+      .feature-icon svg { width: 100%; height: 100%; }
+      .feature-card h3 { font-size: 0.88rem; line-height: 1.25; }
+      .feature-card p { color: var(--muted); font-size: 0.74rem; font-weight: 500; line-height: 1.4; }
+      .platform-cta {
+        max-width: 22rem;
+        margin: 1.4rem auto 0;
+        color: var(--muted);
+        font-weight: 700;
+        line-height: 1.55;
+      }
+
+      .shot-frame {
+        width: 100%;
+        margin-top: 1.15rem;
+        padding: 0.55rem;
+        border: 1px solid var(--line);
+        border-radius: 1.2rem;
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: var(--shadow);
+      }
+      .shot-frame figcaption {
+        margin-bottom: 0.55rem;
+        color: var(--accent);
+        font-size: 0.82rem;
+        font-weight: 800;
+        text-align: center;
+      }
+      .shot-frame img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 0.85rem;
+        background: #eef4f8;
+      }
+      .mosaic {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        width: 100%;
+        margin-top: 1.15rem;
+        align-items: stretch;
+      }
+      .mosaic .shot-frame {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        height: 100%;
+        margin-top: 0;
+      }
+      .mosaic .shot-frame img {
+        width: 100%;
+        min-height: 0;
+      }
+      .shot-lead {
+        margin: 0.7rem 0.15rem 0;
+        color: var(--text);
+        font-size: 0.92rem;
+        font-weight: 800;
+        line-height: 1.35;
+        text-align: center;
+      }
+      .shot-note {
+        margin: 0.28rem 0.2rem 0.15rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 500;
+        line-height: 1.5;
+        text-align: center;
+      }
+      .shot-history { order: 1; }
+      .shot-core { order: 2; }
+      .shot-alerts { order: 3; }
+      .shot-table { order: 4; }
+      .shot-sites { order: 5; }
+
+      .closing {
+        padding-top: 3.1rem;
+        padding-bottom: max(1.55rem, calc(env(safe-area-inset-bottom) + 0.85rem));
+      }
+      .closing-light {
+        position: absolute;
+        inset-inline: 0;
+        top: 8%;
+        width: 8rem;
+        height: 8rem;
+        margin-inline: auto;
+        border-radius: 999px;
+        background: rgba(31, 155, 154, 0.28);
+        filter: blur(40px);
+        pointer-events: none;
+        animation: pulse 4.5s ease-in-out infinite;
+      }
+      .closing .brand-pills { margin-top: 1.35rem; }
+      .footer-note {
+        display: block;
+        margin-top: 1.1rem;
+        text-align: center;
+      }
+      .footer-note {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.42rem;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .sep-dot {
+        width: 0.38rem;
+        height: 0.38rem;
+        border-radius: 999px;
+        background: var(--teal);
+      }
+
+      .hero-plus-grid {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: auto;
+        opacity: 0.55;
+      }
+
+      .reveal { opacity: 1; transform: none; }
+      html.motion-ready .reveal:not(.is-in) {
+        opacity: 0;
+        transform: translate3d(0, 22px, 0);
+      }
+      html.motion-ready .reveal.is-in {
+        opacity: 1;
+        transform: none;
+        transition: opacity var(--reveal-duration) var(--ease-out), transform var(--reveal-duration) var(--ease-out);
+        transition-delay: calc(var(--i, 0) * 70ms);
+      }
+      html.motion-ready .hero:not(.is-entered) [data-hero-step] {
+        opacity: 0;
+        transform: translate3d(0, 16px, 0);
+      }
+      html.motion-ready .hero [data-hero-step] {
+        transition: opacity 0.65s var(--ease-out), transform 0.65s var(--ease-out);
+      }
+      html.motion-ready .hero.step-logo [data-hero-step="logo"],
+      html.motion-ready .hero.step-pills [data-hero-step="pills"],
+      html.motion-ready .hero.step-title [data-hero-step="title"],
+      html.motion-ready .hero.step-lead [data-hero-step="lead"],
+      html.motion-ready .hero.step-chevron [data-hero-step="chevron"],
+      html.motion-ready .hero.is-entered [data-hero-step] {
+        opacity: 1;
+        transform: none;
+      }
+
+      @keyframes logoBreath {
+        0%, 100% { opacity: 0.62; transform: scale(1); }
+        50% { opacity: 0.88; transform: scale(1.04); }
+      }
+      @keyframes logo-bar-wave {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-11px); }
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.55; transform: scale(1); }
+        50% { opacity: 0.9; transform: scale(1.08); }
+      }
+      @keyframes scroll-chevrons {
+        0%, 100% { opacity: 0.28; transform: rotate(45deg) translate(-0.12rem, -0.12rem); }
+        50% { opacity: 1; transform: rotate(45deg) translate(0.1rem, 0.1rem); }
+      }
+      @keyframes marquee {
+        from { transform: translateX(0); }
+        to { transform: translateX(50%); }
+      }
+
+      @media (max-width: 860px) {
+        .hero { overflow: visible; }
+        .hero-portal {
+          top: 1rem;
+          left: 1rem;
+        }
+        .hero-mark { margin-top: 2.7rem; }
+        .hero-portal .logo-portal {
+          height: clamp(1.85rem, 8vw, 2.2rem);
+          max-width: min(8.8rem, 44vw);
+        }
+      }
+
+      @media (min-width: 720px) {
+        .feature-grid { grid-template-columns: repeat(3, 1fr); }
+        .feature-card:nth-child(odd)::after { content: none; }
+        .feature-card:not(:nth-child(3n))::after {
+          content: "";
+          position: absolute;
+          inset-inline-end: 0;
+          top: 14%;
+          bottom: 14%;
+          width: 1px;
+          background: rgba(46, 125, 160, 0.22);
+        }
+        body { padding-block: 1.4rem; }
+        .site {
+          border-radius: 1.8rem;
+          background: rgba(255, 255, 255, 0.42);
+          box-shadow: 0 0 0 1px rgba(98, 125, 144, 0.16);
+        }
+        .section { padding-inline: 2.4rem; }
+      }
+
+      @media (min-width: 900px) {
+        .mosaic {
+          grid-template-columns: minmax(0, 1.42fr) minmax(0, 0.92fr);
+          gap: 0.75rem;
+        }
+        .shot-history { grid-column: 1; grid-row: 1; }
+        .shot-core { grid-column: 2; grid-row: 1; }
+        .shot-table { grid-column: 1; grid-row: 2; }
+        .shot-alerts { grid-column: 2; grid-row: 2; }
+        .shot-sites { grid-column: 1 / -1; grid-row: 3; }
+        .shot-sites img {
+          aspect-ratio: 16 / 8.05;
+          object-fit: cover;
+          object-position: top center;
+        }
+        .shot-history img,
+        .shot-table img {
+          aspect-ratio: 16 / 9;
+          object-fit: cover;
+          object-position: top center;
+        }
+        .shot-core img {
+          aspect-ratio: 1.12 / 1;
+          object-fit: cover;
+          object-position: right center;
+        }
+        .shot-alerts img {
+          aspect-ratio: 427 / 390;
+          object-fit: contain;
+          object-position: center top;
+          background: #f7fafc;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .closing-light, .marquee-track, .scroll-hint span, .hero.is-entered .hero-mark::before { animation: none !important; }
+        .reveal, html.motion-ready .reveal:not(.is-in), html.motion-ready .hero:not(.is-entered) [data-hero-step] {
+          opacity: 1 !important;
+          transform: none !important;
+          transition: none !important;
+        }
+        .logo-bars.is-waving .logo-bar { animation: none; }
+      }
+    
+CSS_END
+HTML_START
+ <main class="site"> <section class="section hero" id="intro"> <canvas class="hero-plus-grid" aria-hidden="true"></canvas> <div class="hero-portal reveal" data-hero-step="pills"> <img class="logo-portal" src="" alt="DataTeam" /> </div> <div class="hero-mark reveal" data-hero-step="logo"> <button type="button" class="hero-mark-hit" aria-label="LoadInsight"> <svg class="logo-bars" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 190" preserveAspectRatio="xMidYMid meet" aria-hidden="true"> <defs> <filter id="li-hero-glow" x="-30%" y="-30%" width="160%" height="160%"> <feGaussianBlur stdDeviation="9" result="blur" /> <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.38 0" result="glow" /> <feMerge> <feMergeNode in="glow" /> <feMergeNode in="SourceGraphic" /> </feMerge> </filter> <linearGradient id="li-hero-green" x1="0" x2="0" y1="0" y2="1"> <stop offset="0" stop-color="#55d595" /> <stop offset="1" stop-color="#1c9a80" /> </linearGradient> <linearGradient id="li-hero-red" x1="0" x2="0" y1="0" y2="1"> <stop offset="0" stop-color="#f04362" /> <stop offset="1" stop-color="#bd1848" /> </linearGradient> <linearGradient id="li-hero-orange" x1="0" x2="0" y1="0" y2="1"> <stop offset="0" stop-color="#ffbe58" /> <stop offset="1" stop-color="#ef8f2e" /> </linearGradient> </defs> <g filter="url(#li-hero-glow)" opacity="0.96"> <rect class="logo-bar" style="--i:0" x="22" y="83" width="18" height="52" rx="9" fill="url(#li-hero-green)" /> <rect class="logo-bar" style="--i:1" x="54" y="67" width="20" height="84" rx="10" fill="url(#li-hero-green)" /> <rect class="logo-bar" style="--i:2" x="88" y="81" width="20" height="66" rx="10" fill="url(#li-hero-green)" /> <rect class="logo-bar" style="--i:3" x="122" y="51" width="22" height="118" rx="11" fill="#1f9b9a" /> <rect class="logo-bar" style="--i:4" x="170" y="11" width="24" height="168" rx="12" fill="url(#li-hero-red)" /> <rect class="logo-bar" style="--i:5" x="210" y="53" width="22" height="116" rx="11" fill="url(#li-hero-red)" /> <rect class="logo-bar" style="--i:6" x="250" y="84" width="20" height="67" rx="10" fill="url(#li-hero-orange)" /> <rect class="logo-bar" style="--i:7" x="284" y="103" width="20" height="48" rx="10" fill="url(#li-hero-orange)" /> <rect class="logo-bar" style="--i:8" x="318" y="125" width="18" height="31" rx="9" fill="url(#li-hero-orange)" /> </g> <g fill="#0e1a24"> <text x="380" y="102" font-family="Assistant, sans-serif" font-size="62" font-weight="700" letter-spacing="-2">LoadInsight</text> <text x="462" y="153" font-family="Assistant, sans-serif" font-size="34" font-weight="400" letter-spacing="1.5">by DataTeam</text> </g> </svg> </button> </div> <h1 class="reveal" data-hero-step="title">ניטור עומסים ברשת</h1> <p class="lead reveal" data-hero-step="lead"> תמונת מצב אחת לאתרים, לליבה ולהתראות.<br /> רואים מה עמוס, ומה דורש טיפול. </p> <a class="scroll-hint hero-scroll-hint reveal" data-hero-step="chevron" href="#platform" aria-label="המשך למטה"> <span aria-hidden="true"></span> <span aria-hidden="true"></span> </a> </section> <div class="marquee" aria-hidden="true"> <div class="marquee-track"> <span>ניטור עומסים</span><span>אתרים</span><span>ליבה</span><span>התראות</span> <span>היסטוריה</span><span>קבוצות</span><span>ייבוא</span><span>הרשאות</span> <span>ניטור עומסים</span><span>אתרים</span><span>ליבה</span><span>התראות</span> <span>היסטוריה</span><span>קבוצות</span><span>ייבוא</span><span>הרשאות</span> </div> </div> <section class="section platform" id="platform"> <h2 class="reveal">מה רואים במערכת</h2> <p class="reveal">עומס על האתר, מצב הליבה, והתראה כשמשהו חורג. הכול במקום אחד.</p> <ul class="feature-grid"> <li class="feature-card reveal" style="--i: 0"> <span class="feature-icon" aria-hidden="true"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"> <path d="M4 16.5 8.2 11l3.1 3.2L20 6.5" /> <path d="M14.5 6.5H20V12" /> </svg> </span> <h3>ניטור עומסים באתרים</h3> <p>לפי ממשק, או לפי מספר אתר.</p> </li> <li class="feature-card reveal" style="--i: 1"> <span class="feature-icon" aria-hidden="true"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"> <rect x="3.5" y="4" width="17" height="6" rx="1.4" /> <rect x="3.5" y="14" width="17" height="6" rx="1.4" /> <path d="M7 7h.01M7 17h.01" /> </svg> </span> <h3>ניטור ליבה</h3> <p>נתבים, ספים, וחריגות.</p> </li> <li class="feature-card reveal" style="--i: 2"> <span class="feature-icon" aria-hidden="true"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"> <path d="M6 16.2a7 7 0 1 1 12 0" /> <path d="M12 16.2 15.6 11" /> <circle cx="12" cy="16.2" r="1.1" fill="currentColor" stroke="none" /> </svg> </span> <h3>התראות</h3> <p>עומס תעבורה וחריגות ליבה.</p> </li> <li class="feature-card reveal" style="--i: 3"> <span class="feature-icon" aria-hidden="true"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"> <path d="M4 16c2.2-4 4.2-6 6.2-6s3.2 3 5 3 3.4-5 4.8-8" /> <path d="M4 20h16" /> </svg> </span> <h3>היסטוריית עומסים</h3> <p>מגמה לאורך זמן, לא רק הרגע.</p> </li> <li class="feature-card reveal" style="--i: 4"> <span class="feature-icon" aria-hidden="true"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"> <rect x="3.5" y="3.5" width="7" height="7" rx="1.2" /> <rect x="13.5" y="3.5" width="7" height="7" rx="1.2" /> <rect x="3.5" y="13.5" width="7" height="7" rx="1.2" /> <rect x="13.5" y="13.5" width="7" height="7" rx="1.2" /> </svg> </span> <h3>קבוצות אתרים</h3> <p>סידור תפעולי לפי קבוצה.</p> </li> <li class="feature-card reveal" style="--i: 5"> <span class="feature-icon" aria-hidden="true"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"> <circle cx="9" cy="8" r="2.6" /> <circle cx="16" cy="9" r="2" /> <path d="M4.2 18.2c.6-2.4 2.4-3.7 4.8-3.7s4.2 1.3 4.8 3.7" /> <path d="M14 17.4c.4-1.4 1.5-2.2 3-2.2 1.3 0 2.3.6 2.8 1.6" /> </svg> </span> <h3>הרשאות</h3> <p>תפקיד, והיקף האתרים שרואים.</p> </li> </ul> <p class="platform-cta reveal">ייבוא מהקבצים המקומיים. בלי לצאת מהרשת.</p> <a class="scroll-hint reveal" href="#views" aria-label="המשך למבטים"> <span aria-hidden="true"></span> <span aria-hidden="true"></span> </a> </section> <section class="section" id="views"> <h2 class="reveal">המסכים עצמם</h2> <p class="reveal">היסטוריה, ליבה, והתראות — כמו שהן נראות אחרי הכניסה.</p> <div class="mosaic"> <figure class="shot-frame shot-sites reveal" style="--i: 0"> <figcaption>ניטור עומסים באתרים</figcaption> <img src="" alt="כרטיסי אתרים במסך ניטור עומסים" /> <p class="shot-lead">איפה הרשת עמוסה ברגע זה</p> <p class="shot-note">כל אתר בכרטיס, עם ניצולת נכנסת ויוצאת לכל ממשק. רואים איפה העומס גבוה ועל איזה ממשק הוא יושב.</p></figure> <figure class="shot-frame shot-history reveal" style="--i: 1"> <figcaption>היסטוריית עומסים</figcaption> <img src="" alt="גרף היסטוריית עומסים לאתר דמה 00000" /> <p class="shot-lead">מה קרה לאתר בימים האחרונים</p> <p class="shot-note">מגמת העומס של אתר לאורך זמן, לא רק הרגע הנוכחי. רואים אם העומס חוזר, עולה, או כבר ירד.</p></figure> <figure class="shot-frame shot-core reveal" style="--i: 2"> <figcaption>ניטור ליבה</figcaption> <img src="" alt="כרטיסי נתבים באתר ליבה 00000" /> <p class="shot-lead">האם הנתבים עצמם עומדים בעומס</p> <p class="shot-note">כרטיסי הנתבים לפי אתר ליבה: מעבד, זיכרון וטמפרטורה מול הספים. רואים מיד איזו ליבה תקינה ואיזו דורשת טיפול.</p></figure> <figure class="shot-frame shot-alerts reveal" style="--i: 3"> <figcaption>התראות</figcaption> <img src="" alt="רשימת התראות אחרונות בסקירת המערכת" /> <p class="shot-lead">מה פתוח ודורש מבט עכשיו</p> <p class="shot-note">חלון מהיר של ההתראות מ-24 השעות האחרונות, בלי לצאת מהמסך. עומס תעבורה וניטור ליבה מופיעים יחד.</p></figure> <figure class="shot-frame shot-table reveal" style="--i: 4"> <figcaption>התראות מהשבוע האחרון</figcaption> <img src="" alt="טבלת התראות עומס תעבורה" /> <p class="shot-lead">השבוע שעבר, במבט אחד</p> <p class="shot-note">ההתראות מהשבוע בטבלה אחת: עומס תעבורה וניטור ליבה, פעילות ושהסתיימו. מסננים לפי סוג, סטטוס ותאריך, ונכנסים לשורה הרלוונטית.</p></figure> </div> </section> <section class="section closing" id="closing"> <div class="closing-light"></div> <h2 class="reveal">מהאתר ועד הליבה</h2> <p class="reveal">תמיד עם תמונת המצב המלאה.</p> <div class="brand-pills reveal"> <span class="brand-logo"> <img class="logo-word" src="" alt="LoadInsight" /> </span> <i></i> <span class="brand-logo"> <img class="logo-portal" src="" alt="DataTeam" /> </span> </div> <p class="footer-note reveal" dir="ltr" lang="en"> DataTeam - Build <span class="sep-dot" aria-hidden="true"></span> Analyze <span class="sep-dot" aria-hidden="true"></span> Deliver </p> </section> </main> <script> (() => { const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; const html = document.documentElement; const hero = document.querySelector(".hero"); const heroHit = document.querySelector(".hero-mark-hit"); const chevron = document.querySelector(".hero-scroll-hint"); const canvas = document.querySelector(".hero-plus-grid"); html.classList.add("motion-ready"); const mark = (el) => el && el.classList.add("is-in"); const steps = ["logo", "pills", "title", "lead", "chevron"]; if (reduced) { hero.classList.add("is-entered", ...steps.map((s) => "step-" + s)); document.querySelectorAll(".reveal").forEach(mark); } else { steps.forEach((step, index) => { window.setTimeout(() => { hero.classList.add("step-" + step); mark(hero.querySelector('[data-hero-step="' + step + '"]')); if (index === steps.length - 1) hero.classList.add("is-entered"); }, 160 + index * 180); }); const targets = Array.from(document.querySelectorAll(".reveal")).filter((el) => !el.closest(".hero")); const io = new IntersectionObserver((entries) => { entries.forEach((entry) => { if (!entry.isIntersecting) return; mark(entry.target); io.unobserve(entry.target); }); }, { threshold: 0.12 }); targets.forEach((el) => io.observe(el)); } if (heroHit && !reduced) { const logo = heroHit.querySelector(".logo-bars"); heroHit.addEventListener("click", () => { if (!logo) return; logo.classList.remove("is-waving"); void logo.getBoundingClientRect(); logo.classList.add("is-waving"); }); } document.querySelectorAll(".feature-card").forEach((card) => { const setPressed = (on) => card.classList.toggle("is-pressed", on); card.addEventListener("pointerdown", () => setPressed(true)); card.addEventListener("pointerup", () => setPressed(false)); card.addEventListener("pointerleave", () => setPressed(false)); card.addEventListener("pointercancel", () => setPressed(false)); }); const onScroll = () => { if (!chevron || reduced) return; const bottom = hero.getBoundingClientRect().bottom; chevron.classList.toggle("is-gone", bottom < 48); chevron.classList.toggle("is-faded", bottom >= 48 && window.scrollY > 28); }; window.addEventListener("scroll", onScroll, { passive: true }); if (canvas && hero) { const ctx = canvas.getContext("2d"); let cols = 0, rows = 0, gapX = 0, gapY = 0, width = 0, height = 0; let energy = null; let raf = 0; const layout = () => { const rect = hero.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2); width = Math.max(1, rect.width); height = Math.max(1, rect.height); canvas.width = Math.floor(width * dpr); canvas.height = Math.floor(height * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); const target = width < 400 ? 34 : 40; cols = Math.max(6, Math.floor(width / target)); rows = Math.max(8, Math.floor(height / target)); gapX = width / (cols + 1); gapY = height / (rows + 1); energy = new Float32Array(cols * rows); }; const draw = () => { ctx.clearRect(0, 0, width, height); ctx.font = "700 11px Segoe UI, Arial, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; let active = false; for (let r = 0; r < rows; r += 1) { for (let c = 0; c < cols; c += 1) { const i = r * cols + c; let e = energy[i]; if (e > 0.001) { e = Math.max(0, e - 0.02); energy[i] = e; active = active || e > 0.001; } const a = Math.min(0.85, 0.16 + e * 0.7); ctx.fillStyle = "rgba(46, 125, 160, " + a + ")"; ctx.fillText("+", gapX + c * gapX, gapY + r * gapY); } } raf = active ? requestAnimationFrame(draw) : 0; }; const ripple = (clientX, clientY) => { if (reduced || !energy) return; const rect = canvas.getBoundingClientRect(); const x = clientX - rect.left; const y = clientY - rect.top; const radius = Math.max(gapX, gapY) * 2.4; for (let r = 0; r < rows; r += 1) { for (let c = 0; c < cols; c += 1) { const cx = gapX + c * gapX; const cy = gapY + r * gapY; const dist = Math.hypot(cx - x, cy - y); if (dist > radius) continue; const t = 1 - dist / radius; const i = r * cols + c; energy[i] = Math.min(1, energy[i] + t * t * 0.95); } } if (!raf) raf = requestAnimationFrame(draw); }; layout(); draw(); canvas.addEventListener("pointerdown", (event) => { if (event.target.closest(".hero-mark-hit")) return; ripple(event.clientX, event.clientY); }); window.addEventListener("resize", () => { layout(); if (!raf) raf = requestAnimationFrame(draw); }); } })(); </script> 
+HTML_END
